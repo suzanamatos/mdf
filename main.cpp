@@ -168,14 +168,18 @@ int main(int argc, char *argv[])
 
     //-------------------------------------------------------------------
     //criando as matrizes/vetores
-    MatrixXd A = MatrixXd::Constant(n_elem+1, n_elem+1,-1);
+    MatrixXd *A = new MatrixXd(n_elem+1, n_elem+1);
+    A->setConstant(-1);
     unsigned int size = (n_elem-1)*(n_elem-1);
-    VectorXd f = VectorXd::Zero(size);
-    VectorXd analytical = VectorXd::Zero(size);
+    SpMatrixD f;
+    f.resize(size, 1);
+//    f.setZero();
     SpMatrixD K;
     K.resize(size, size);
-    K.setZero();
-    vector<T> coeffK;
+//    K.setZero();
+    VectorXd analytical = VectorXd::Zero(size);
+
+
 
     double h = L/n_elem;
 
@@ -194,7 +198,7 @@ int main(int argc, char *argv[])
     {
         for(unsigned int j = 1; j < n_elem; j++)
         {
-            A(i,j) = count++;
+            (*A)(i,j) = count++;
         }
     }
 
@@ -202,30 +206,39 @@ int main(int argc, char *argv[])
     //preenchendo o sistema
     for(unsigned int i = 1; i < n_elem; i++)
     {
+//        for(unsigned int j = 1; j < i; j++)
+//        {
+//            Vector2d pos(h*i, h*j);
+//            f.insert((*A)(i, j), 0) = h*h * pFunction(typeP, p, pos);
+//            analytical((*A)(i, j)) = calculateAnalytical(typeP, p, pos, L);
+//        }
         for(unsigned int j = 1; j < n_elem; j++)
         {
-            if(A(i-1, j) >= 0)
-                coeffK.push_back(T(A(i, j), A(i-1, j), 1));
+            if((*A)(i-1, j) >= 0)
+                K.insert((*A)(i, j), (*A)(i-1, j)) = 1;
 
-            if(A(i, j-1) >= 0)
-                coeffK.push_back(T(A(i, j), A(i, j-1), 1));
+            if((*A)(i, j-1) >= 0)
+                K.insert((*A)(i, j), (*A)(i, j-1)) = 1;
 
-            if(A(i+1, j) >= 0)
-                coeffK.push_back(T(A(i, j), A(i+1, j), 1));
+            if((*A)(i+1, j) >= 0)
+                K.insert((*A)(i, j), (*A)(i+1, j)) = 1;
 
-            if(A(i, j+1) >= 0)
-                coeffK.push_back(T(A(i, j), A(i, j+1), 1));
+            if((*A)(i, j+1) >= 0)
+                K.insert((*A)(i, j), (*A)(i, j+1)) = 1;
 
-            coeffK.push_back(T(A(i, j), A(i, j), -4));
+            K.insert((*A)(i, j), (*A)(i, j)) = -4;
 
             Vector2d pos(h*i, h*j);
-            f(A(i, j)) = h*h * pFunction(typeP, p, pos);
-            analytical(A(i, j)) = calculateAnalytical(typeP, p, pos, L);
+
+            f.insert((*A)(i, j), 0) = h*h * pFunction(typeP, p, pos);
+            analytical((*A)(i, j)) = calculateAnalytical(typeP, p, pos, L);
         }
     }
+    delete A;
 
-    K.setFromTriplets(coeffK.begin(), coeffK.end());
-    coeffK.clear();
+//    cout << MatrixXd(K)<<endl;
+//    cout << K<<endl;
+
 
     //MatrixXd K0=MatrixXd(K);
 
@@ -233,15 +246,17 @@ int main(int argc, char *argv[])
     //-------------------------------------------------------------------
     //resolvendo o sistema
     SparseLU<SpMatrixD> lu;
+    //lu.isSymmetric(true);
     K.makeCompressed();
     lu.analyzePattern(K);
     lu.factorize(K);
 
-    if(lu.info()!=0)
-    {
-        std::cout<<"\t\t\t\tnão conseguiu fatorar a matriz de !!!"<<std::endl;
-        exit(1);
-    }
+//    if(lu.info()!=0)
+//    {
+//        std::cout<<"\t\t\t\tnão conseguiu fatorar a matriz de !!!"<<std::endl;
+//        exit(1);
+//    }
+    f.makeCompressed();
     VectorXd x = lu.solve(f);
 
 
