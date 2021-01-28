@@ -3,6 +3,7 @@
 #include <Eigen/Core>
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
+#include <limits>
 #include <iostream>
 #include <iomanip>
 #include <fstream>
@@ -243,14 +244,67 @@ void saveDisplacements(const std::stringstream &_label, unsigned int _n_elem, co
 
 }
 
-void saveDisplacements(const std::stringstream &_label,
-                       double _L, double _D, unsigned int _n_elemL, unsigned int _n_elemD,
+//void saveDisplacements(const std::stringstream &_label,
+//                       double _L, double _D, unsigned int _n_elemL, unsigned int _n_elemD,
+//                       unsigned int _n_elemL_part, unsigned int _n_elemD_part,
+//                       const VectorXd &_x)
+//{
+//    std::stringstream outputFileName;
+//    outputFileName.str("");
+//    outputFileName<<"extra_resultado" << _label.str();
+//    cout << outputFileName.str()<<endl;
+//    ofstream resultFile(outputFileName.str(), std::ofstream::out);
+
+
+//    if (!resultFile.is_open())
+//    {
+//        cerr<<"[MAIN] o arquivo de resultado não foi aberto"<<endl;
+//        exit(1);
+//    }
+
+
+//    //fazendo um pós processamento do resultado para que o
+////    cout << "size " << (2*(_n_elemL_part+1)*((_n_elemD_part+1)) - ceil((_n_elemL_part+1)/2.)) << endl;
+//    VectorXd newX = VectorXd::Zero(2*(_n_elemL_part+1)*((_n_elemD_part+1)) - ceil((_n_elemL_part+1)/2.));
+//    unsigned int count = 0;
+//    unsigned int i = 0;
+//    for(i = 1; i < _n_elemD_part; i++)
+//    {
+//        for(unsigned int j = 1; j < _n_elemL_part; j++)
+//        {
+////            cout << "1 POSICAO " << i*(_n_elemL_part+1)+j <<  endl;
+//            newX(i*(_n_elemL_part+1)+j) = _x(count++);
+//        }
+//    }
+//    for(unsigned int j = _n_elemL_part/2 + 1; j < _n_elemL_part; j++)
+//    {
+////        cout << "2 POSICAO " << i*(_n_elemL_part+1)+j <<  endl;
+//        newX(i*(_n_elemL_part+1)+j) = _x(count++);
+//    }
+//    for(i = _n_elemD_part +1; i < _n_elemD; i++)
+//    {
+//        for(unsigned int j = 1; j < _n_elemL_part; j++)
+//        {
+////            cout << "3 POSICAO " << i*(_n_elemL_part+1)+j + (_n_elemL_part)/2.  <<  endl;
+//            newX(i*(_n_elemL_part+1)+j + (_n_elemL_part)/2.) = _x(count++);
+//        }
+//    }
+
+//    for(unsigned int i = 0; i < newX.rows(); i++)
+//    {
+//        resultFile << setprecision(15) << newX(i) <<endl;
+//    }
+
+//}
+
+void saveDisplacements(const std::stringstream &_label, double _L, double _D,
+                       double _hx, double _hy, unsigned int _n_elemL, unsigned int _n_elemD,
                        unsigned int _n_elemL_part, unsigned int _n_elemD_part,
                        const VectorXd &_x)
 {
     std::stringstream outputFileName;
     outputFileName.str("");
-    outputFileName<<"resultado" << _label.str();
+    outputFileName<<"extra_resultado" << _label.str();
     cout << outputFileName.str()<<endl;
     ofstream resultFile(outputFileName.str(), std::ofstream::out);
 
@@ -262,40 +316,57 @@ void saveDisplacements(const std::stringstream &_label,
     }
 
 
-    //fazendo um pós processamento do resultado para que o
-    cout << "size " << (2*(_n_elemL_part+1)*((_n_elemD_part+1)) - ceil((_n_elemL_part+1)/2.)) << endl;
-    VectorXd newX = VectorXd::Zero(2*(_n_elemL_part+1)*((_n_elemD_part+1)) - ceil((_n_elemL_part+1)/2.));
+    MatrixXd *A = new MatrixXd(_n_elemD+1, _n_elemL+1);
+    A->setConstant(std::numeric_limits<double>::infinity());
+
     unsigned int count = 0;
-    unsigned int i = 0;
-    for(i = 1; i < _n_elemD_part; i++)
+    for(unsigned int i = 0; i < _n_elemD_part; i++)
     {
-        for(unsigned int j = 1; j < _n_elemL_part; j++)
+        for(unsigned int j = _n_elemL_part/2; j <= _n_elemL; j++)
         {
-            cout << "1 POSICAO " << i*(_n_elemL_part+1)+j <<  endl;
-            newX(i*(_n_elemL_part+1)+j) = _x(count++);
+            if ( (i == 0) || (j == _n_elemL_part/2) || (j == _n_elemL))
+                (*A)(i,j) = 0;
+            else
+                (*A)(i,j) = _x[count++];
         }
     }
-    for(unsigned int j = _n_elemL_part/2 + 1; j < _n_elemL_part; j++)
+    cout << "_n_elemL_part/2 " << _n_elemL_part/2 << endl;
+    for(unsigned int j = 0; j <= _n_elemL; j++)
     {
-        cout << "2 POSICAO " << i*(_n_elemL_part+1)+j <<  endl;
-        newX(i*(_n_elemL_part+1)+j) = _x(count++);
+        if ((j <= _n_elemL_part/2) || (j >=_n_elemL_part))
+            (*A)(_n_elemD_part,j) = 0;
+        else
+            (*A)(_n_elemD_part, j) = _x[count++];
     }
-    for(i = _n_elemD_part +1; i < _n_elemD; i++)
+    for(unsigned int i = _n_elemD_part+1; i <= _n_elemD; i++)
     {
-        for(unsigned int j = 1; j < _n_elemL_part; j++)
+        for(unsigned int j = 0; j <= _n_elemL_part; j++)
         {
-            cout << "3 POSICAO " << i*(_n_elemL_part+1)+j + (_n_elemL_part)/2.  <<  endl;
-            newX(i*(_n_elemL_part+1)+j + (_n_elemL_part)/2.) = _x(count++);
+            if ( (i == _n_elemD) || (j == 0) || (j == _n_elemL_part))
+                (*A)(i,j) = 0;
+            else
+                (*A)(i,j) = _x[count++];
         }
     }
 
-    for(unsigned int i = 0; i < newX.rows(); i++)
+    cout << "resultado" << endl << *A << endl;
+
+
+    resultFile << setprecision(15) << _L << "\t" << _D << "\t" << A->rows() << "\t" << A->cols() << "\t" << _hx << "\t" << _hy  <<endl;
+    for(unsigned int i = 0; i < A->rows(); i++)
     {
-        resultFile << setprecision(15) << newX(i) <<endl;
+        for(unsigned int j = 0; j < A->cols(); j++)
+        {
+            resultFile << setprecision(15) << (*A)(i,j) << "\t";
+        }
+        resultFile <<endl;
     }
 
+
+
+
+    delete A;
 }
-
 
 void quadModel(unsigned int n_elem, double L, double p, P typeP)
 {
@@ -483,7 +554,7 @@ void ladderModel(unsigned int _n_elemL_part, unsigned int _n_elemD_part, double 
     label.str("");
     label << "_L-"<<L<< "_D-"<<D<<"_Nl-"<<_n_elemL_part<<"_Nd-"<<_n_elemD_part<<"_p-"<<p<<"_tipo-"<<int(typeP)<<"COEFFK_Cholesky.txt";
 
-    savePositions(label, L, D, n_elemL, n_elemD, _n_elemL_part, _n_elemD_part, hx, hy);
+//    savePositions(label, L, D, n_elemL, n_elemD, _n_elemL_part, _n_elemD_part, hx, hy);
 
 
     cout << "Criando matriz auxiliar" << endl;
@@ -606,7 +677,7 @@ void ladderModel(unsigned int _n_elemL_part, unsigned int _n_elemD_part, double 
     cout << "Salvando o resultado" << endl;
     TimeSpent salvandoTime("Salvo o resultado | TEMPO: ");
     salvandoTime.startCount();
-    saveDisplacements(label, L, D, n_elemL, n_elemD, _n_elemL_part, _n_elemD_part, x);
+    saveDisplacements(label, L, D, hx, hy, n_elemL, n_elemD, _n_elemL_part, _n_elemD_part, x);
 
     cout <<"Fim"<< endl;
 }
@@ -622,7 +693,7 @@ int main(int argc, char *argv[])
 //    quadModel(n_elem, L, p, typeP);
 
     unsigned int n_elemL = 6; //numero de elementos em cada direção X
-    unsigned int n_elemD = 5; //numero de elementos em cada direção Y
+    unsigned int n_elemD = 6; //numero de elementos em cada direção Y
     double L = 2; //tamanho do domínio quadrado
     double D = 2; //tamanho do domínio quadrado
     double p = 1;   //constante para a função p
