@@ -297,6 +297,8 @@ void saveDisplacements(const std::stringstream &_label, unsigned int _n_elem, co
 
 //}
 
+
+#define VEUSZ 1
 void saveDisplacements(const std::stringstream &_label, double _L, double _D,
                        double _hx, double _hy, unsigned int _n_elemL, unsigned int _n_elemD,
                        unsigned int _n_elemL_part, unsigned int _n_elemD_part,
@@ -304,7 +306,11 @@ void saveDisplacements(const std::stringstream &_label, double _L, double _D,
 {
     std::stringstream outputFileName;
     outputFileName.str("");
-    outputFileName<<"extra_resultado" << _label.str();
+    #if VEUSZ
+        outputFileName<<"WITHOUTTOPextra_resultado" << _label.str();
+    #else
+        outputFileName<<"extra_resultado" << _label.str();
+    #endif
     cout << outputFileName.str()<<endl;
     ofstream resultFile(outputFileName.str(), std::ofstream::out);
 
@@ -317,7 +323,8 @@ void saveDisplacements(const std::stringstream &_label, double _L, double _D,
 
 
     MatrixXd *A = new MatrixXd(_n_elemD+1, _n_elemL+1);
-    A->setConstant(std::numeric_limits<double>::infinity());
+
+    A->setConstant(0);
 
     unsigned int count = 0;
     for(unsigned int i = 0; i < _n_elemD_part; i++)
@@ -330,7 +337,7 @@ void saveDisplacements(const std::stringstream &_label, double _L, double _D,
                 (*A)(i,j) = _x[count++];
         }
     }
-    cout << "_n_elemL_part/2 " << _n_elemL_part/2 << endl;
+//    cout << "_n_elemL_part/2 " << _n_elemL_part/2 << endl;
     for(unsigned int j = 0; j <= _n_elemL; j++)
     {
         if ((j <= _n_elemL_part/2) || (j >=_n_elemL_part))
@@ -349,15 +356,30 @@ void saveDisplacements(const std::stringstream &_label, double _L, double _D,
         }
     }
 
-    cout << "resultado" << endl << *A << endl;
+//    cout << "resultado" << endl << *A << endl;
 
 
+    #if VEUSZ
+    for(unsigned int j = 0; j < A->cols(); j++)
+    {
+        resultFile << setprecision(15) << ", " << j*_hy;
+    }
+    resultFile <<endl;
+    #else
     resultFile << setprecision(15) << _L << "\t" << _D << "\t" << A->rows() << "\t" << A->cols() << "\t" << _hx << "\t" << _hy  <<endl;
+    #endif
     for(unsigned int i = 0; i < A->rows(); i++)
     {
+        #if VEUSZ
+        resultFile << setprecision(15) << - (i*_hx-_D);
+        #endif
         for(unsigned int j = 0; j < A->cols(); j++)
         {
-            resultFile << setprecision(15) << (*A)(i,j) << "\t";
+           #if VEUSZ
+           resultFile << ","<< setprecision(15) << (*A)(i,j);
+           #else
+           resultFile << setprecision(15) << (*A)(i,j) << "\t";
+           #endif
         }
         resultFile <<endl;
     }
@@ -585,7 +607,7 @@ void ladderModel(unsigned int _n_elemL_part, unsigned int _n_elemD_part, double 
         }
     }
 
-    cout << "A" << endl << *A << endl;
+//    cout << "A" << endl << *A << endl;
     criandoATime.endCount();
     criandoATime.print();
 
@@ -668,7 +690,7 @@ void ladderModel(unsigned int _n_elemL_part, unsigned int _n_elemD_part, double 
     VectorXd x = chol.solve(f);
     resolvendoSistemaTime.endCount();
     resolvendoSistemaTime.print();
-    cout <<"\n\n"<< MatrixXd(x)<<endl;
+//    cout <<"\n\n"<< MatrixXd(x)<<endl;
 
 
 
@@ -692,8 +714,8 @@ int main(int argc, char *argv[])
 //        n_elem = atoi(argv[1]);
 //    quadModel(n_elem, L, p, typeP);
 
-    unsigned int n_elemL = 6; //numero de elementos em cada direção X
-    unsigned int n_elemD = 6; //numero de elementos em cada direção Y
+    unsigned int n_elemL = 2000; //numero de elementos em cada direção X
+    unsigned int n_elemD = 2000; //numero de elementos em cada direção Y
     double L = 2; //tamanho do domínio quadrado
     double D = 2; //tamanho do domínio quadrado
     double p = 1;   //constante para a função p
