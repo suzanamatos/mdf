@@ -1,0 +1,19 @@
+[TODO] Viga misulada
+- Fazer um exemplo de mísula simples
+ . ângulo de 45º -> hx = hy
+ . carga distribuida p - 1000kg/m
+ . Largula = 12m
+ . Tamanho da mísula = 2.4 m
+ . Altura maior = 3.6
+ . Altura menor = 1.2
+ . plane strain (T=1)
+
+- Criar o modelo 
+ . criar os nos  ->  setar a matriz A com os numeros das eq de quem existe e -1 de quem não existe
+ . largula 41 nós   -----> hx = hy = 0.3 
+ . altura 13 nós
+- Preencher o sistema (com base na matriz A)
+ . [FUTURO] angulo diferente de 45
+- Salvar a matriz solução em arquivo
+ . considerar salvar para X e Y separadamente
+ 

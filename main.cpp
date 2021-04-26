@@ -704,6 +704,218 @@ void ladderModel(unsigned int _n_elemL_part, unsigned int _n_elemD_part, double 
     cout <<"Fim"<< endl;
 }
 
+struct XY
+{
+    XY() : x (-1),y(-1){}
+    XY(int _x, int _y) : x (_x),y(_y){}
+    int x;
+    int y;
+};
+
+typedef Matrix<XY, Dynamic, Dynamic> NumEquationMatrix;
+
+void haunchedBeamModel(unsigned int n_elemL, unsigned int n_elemD, double L, double h,
+                       double l_haunch, double h_haunch, double p, P typeP)
+{
+
+    //-------------------------------------------------------------------
+    //matriz que contem as equacoes associadas aos nós
+    NumEquationMatrix *A = new NumEquationMatrix(n_elemD+1, n_elemL+1);
+    //-1 restrito
+
+    cout << "Criando matriz auxiliar" << endl;
+    TimeSpent criandoATime("Criada matriz auxiliar | TEMPO: ");
+    criandoATime.startCount();
+    //-------------------------------------------------------------------
+    //preenchendo a matriz A que contem o nº das equacoes
+    //os valores vão ser só os pares (os impartes serão da outra direção)
+    //quem não tem equação são os pontos presos, isso é, os "peszinhos" da mísula
+    //  o lado da esquerda é zerado em x e em y
+    //  o lado da direita é zerado somente na direção y (não subir)
+    //linha -- Y
+    //coluna -- X
+    unsigned int count = 0;
+
+    //quantidade das linhas da matriz que fazem parte do retangulo de cima
+    unsigned int n_elemD_top = (n_elemD * (h))/(h + h_haunch);
+    //criando as equações do retangulo de cima
+    for(unsigned int i = 0; i <= n_elemD_top; i++)
+    {
+        for(unsigned int j = 0; j <= n_elemL; j++)
+        {
+            (*A)(i,j) = XY(count, count+1);
+            count += 2;
+        }
+    }
+
+
+    unsigned int n_elemL_haunch = (n_elemL * (l_haunch))/(L);
+    unsigned int step_elemL = 1;
+    cout << "n_elemL_haunch = " << n_elemL_haunch << endl;
+    cout << "step_elemL = " << step_elemL << endl;
+    //criando a mísula da esquerda
+    unsigned int i, j;
+    for(i = n_elemD_top +1; i <= n_elemD; i++)
+    {
+        n_elemL_haunch -= step_elemL;
+        for(j = 0; j <= n_elemL_haunch; j++)
+        {
+            (*A)(i,j) = XY(count, count+1);
+            count += 2;
+        }
+    }
+    //nó completamente preso
+    (*A)(i-1,j-1) = XY(-1, -1);
+    count -=2;
+
+
+    n_elemL_haunch = (n_elemL * (l_haunch))/(L);
+    //criando a mísula da direita
+    for(i = n_elemD_top +1; i <= n_elemD; i++)
+    {
+        n_elemL_haunch -= step_elemL;
+        for(j = n_elemL - n_elemL_haunch; j <= n_elemL; j++)
+        {
+            (*A)(i,j) = XY(count, count+1);
+            count += 2;
+        }
+    }
+    //nó completamente preso
+    count -=2;
+    (*A)(i-1,j-1) = XY(count++, -1);
+
+
+
+    //printando a matriz A
+    for(unsigned int i = 0; i < n_elemD+1; i++)
+    {
+        for(unsigned int j = 0; j < n_elemL+1; j++)
+        {
+            cout << (*A)(i,j).y << "\t";
+        }
+        cout  << endl;
+    }
+    criandoATime.endCount();
+    criandoATime.print();
+
+
+
+    //-------------------------------------------------------------------
+//    std::stringstream label;
+//    label.str("");
+//    label << "_L-"<<L<< "_D-"<<D<<"_Nl-"<<_n_elemL_part<<"_Nd-"<<_n_elemD_part<<"_p-"<<p<<"_tipo-"<<int(typeP)<<"COEFFK_Cholesky.txt";
+
+//    VectorXd f = VectorXd::Zero(count);
+//    SpMatrixD K;
+//    K.resize(count, count);
+//    VectorXd analytical = VectorXd::Zero(count);
+//    vector<T> coeffK;
+
+
+//    double hx = L/_n_elemL_part;
+//    double hy = D/_n_elemD_part;
+
+//    cout << "_n_elemL_part " << _n_elemL_part << endl;
+//    cout << "_n_elemD_part " << _n_elemD_part << endl;
+//    cout << "n_elemL " << n_elemL << endl;
+//    cout << "n_elemD " << n_elemD << endl;
+//    cout << "hx " << hx << endl;
+//    cout << "hy " << hy << endl;
+//    cout << "tamanho do sistema " << size << endl;
+
+
+//    cout << "Preenchendo o sistema" << endl;
+//    TimeSpent preenchendoSistemaTime("Preenchido o sistema | TEMPO: ");
+//    preenchendoSistemaTime.startCount();
+//    //-------------------------------------------------------------------
+//    //preenchendo o sistema
+////    Eigen::initParallel();
+////    Eigen::setNbThreads(2);
+////    #pragma omp parallel for num_threads(2)
+//    for(unsigned int j = 1; j < n_elemL; j++)
+//    {
+//        for(unsigned int i = 1; i < n_elemD; i++)
+//        {
+//            if((*A)(i, j) >= 0)
+//            {
+//                coeffK.push_back(T((*A)(i, j), (*A)(i, j), -4));
+////                cout << "Linha e coluna da matriz K  " <<(*A)(i, j)<< endl;
+//            }
+//            else continue;
+
+//            if((*A)(i-1, j) >= 0)
+//            {
+//                coeffK.push_back(T((*A)(i, j), (*A)(i-1, j), 1));
+////                cout << "Linha da matriz K  " <<(*A)(i, j)<< endl;
+////                cout << "Coluna da matriz K  " <<(*A)(i-1, j)<< endl;
+//            }
+
+//            if((*A)(i, j-1) >= 0)
+//            {
+//                coeffK.push_back(T((*A)(i, j), (*A)(i, j-1), 1));
+////                cout << "Linha da matriz K  " <<(*A)(i, j)<< endl;
+////                cout << "Coluna da matriz K  " <<(*A)(i, j-1)<< endl;
+//            }
+
+//            if((*A)(i+1, j) >= 0)
+//            {
+//                coeffK.push_back(T((*A)(i, j), (*A)(i+1, j), 1));
+////                cout << "Linha da matriz K  " <<(*A)(i, j)<< endl;
+////                cout << "Coluna da matriz K  " <<(*A)(i+1, j)<< endl;
+//            }
+
+//            if((*A)(i, j+1) >= 0)
+//            {
+//                coeffK.push_back(T((*A)(i, j), (*A)(i, j+1), 1));
+////                cout << "Linha da matriz K  " <<(*A)(i, j)<< endl;
+////                cout << "Coluna da matriz K  " <<(*A)(i, j+1)<< endl;
+//            }
+
+
+//            Vector2d pos(hx*j, D - (hy*i));
+////            cout << "posição" <<pos<< endl<<endl<<endl;
+
+//            f.coeffRef((*A)(i, j), 0) = hx*hy * pFunction(typeP, p, pos);
+//        }
+//    }
+
+//    delete A;
+//    K.setFromTriplets(coeffK.begin(), coeffK.end());
+//    coeffK.clear();
+//    K.makeCompressed();
+//    preenchendoSistemaTime.endCount();
+//    preenchendoSistemaTime.print();
+
+////    cout << "\n\nK " <<endl;
+////    cout << MatrixXd(K)<<endl;
+
+////    cout << "\n\nf"<<endl;
+////    cout << MatrixXd(f)<<endl;
+
+
+//    cout << "Resolvendo o sistema" << endl;
+//    TimeSpent resolvendoSistemaTime("Resolvido o sistema | TEMPO: ");
+//    resolvendoSistemaTime.startCount();
+//    //-------------------------------------------------------------------
+//    //resolvendo o sistema
+//    SimplicialCholesky<SpMatrixD> chol(K);
+//    VectorXd x = chol.solve(f);
+//    resolvendoSistemaTime.endCount();
+//    resolvendoSistemaTime.print();
+////    cout <<"\n\n"<< MatrixXd(x)<<endl;
+
+
+
+//    cout <<"acabou processo"<< endl;
+
+//    cout << "Salvando o resultado" << endl;
+//    TimeSpent salvandoTime("Salvo o resultado | TEMPO: ");
+//    salvandoTime.startCount();
+//    saveDisplacements(label, L, D, hx, hy, n_elemL, n_elemD, _n_elemL_part, _n_elemD_part, x);
+
+    cout <<"Fim"<< endl;
+}
+
 int main(int argc, char *argv[])
 {
 //    unsigned int n_elem =10; //numero de elementos em cada direção (SEMPRE PAR)
@@ -714,15 +926,29 @@ int main(int argc, char *argv[])
 //        n_elem = atoi(argv[1]);
 //    quadModel(n_elem, L, p, typeP);
 
-    unsigned int n_elemL = 2000; //numero de elementos em cada direção X
-    unsigned int n_elemD = 2000; //numero de elementos em cada direção Y
-    double L = 2; //tamanho do domínio quadrado
-    double D = 2; //tamanho do domínio quadrado
-    double p = 1;   //constante para a função p
-    P typeP = P::POISSON_EXTRA;
-    if(argc>1)
-        n_elemL = n_elemD= atoi(argv[1]);
-    ladderModel(n_elemL, n_elemD, L, D, p, typeP);
+//    unsigned int n_elemL = 2000; //numero de elementos em cada direção X
+//    unsigned int n_elemD = 2000; //numero de elementos em cada direção Y
+//    double L = 2; //tamanho do domínio quadrado
+//    double D = 2; //tamanho do domínio quadrado
+//    double p = 1;   //constante para a função p
+//    P typeP = P::POISSON_EXTRA;
+//    if(argc>1)
+//        n_elemL = n_elemD= atoi(argv[1]);
+    //ladderModel(n_elemL, n_elemD, L, D, p, typeP);
+
+    unsigned int n_elemL = 40; //numero de elementos em cada direção X
+    unsigned int n_elemD = 12; //numero de elementos em cada direção Y
+    double L = 12; //largura total (m)
+    double h = 1.2; //altura da parte reta
+    double l_haunch = 2.4; //tamanho da misula
+    double h_haunch = 2.4; //tamanho da misula
+    double p = 1000;   //constante para a função p
+    P typeP = P::CONSTANT;
+    if(argc>1){
+        n_elemL = atoi(argv[1]);
+        n_elemD= atoi(argv[2]);
+    }
+    haunchedBeamModel(n_elemL, n_elemD, L, h, l_haunch, h_haunch, p, typeP);
 
     return 0;
 }
