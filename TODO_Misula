@@ -1,12 +1,28 @@
+
 [TODO] Viga misulada
 - Fazer um exemplo de mísula simples
- . ângulo de 45º -> hx = hy
- . carga distribuida p - 1000kg/m
+ . ângulo de approx 30º 
+ . carga distribuida p -> 5mil N/m^2(quadrado? ou não?)  << diminuido para dar a deflexão de mais ou menos 1cm
  . Largula = 12m
- . Tamanho da mísula = 2.4 m
- . Altura maior = 3.6
- . Altura menor = 1.2
- . plane strain (T=1)
+ . Tamanho da mísula = 0.5 m
+ . tamanho da parte reta da mísula (a que encosta) = 0.1 (tem que ser maior que 0.0025
+ . Altura toda = 0.6m
+ . Altura menor = 0.4m
+ . altura misula = 0.2m
+ . plane STRESS => thickness = 0.3m
+ . E = 2.21*10^10   << concreto    -> I = T*D^3/12
+ . nu = 0.15
+ 
+ TODO 
+[OK] - deflexao maxima de 1 cm >>> descobrir a altura e b (provavelmente 0.2)  
+[OK] - Ajeitar a carga distribuida 
+[OK] - plane stress 
+ - ajeitar a formula para h's diferentes
+ - colocar uma extensão de apoio (em baixo para não ficar com bico) 
+ - ALLOWABLE STRESS <<< para vigas 
+ 	sigma  <  sigma_barra (tensão maxima permitida)
+ - colocar mais ou menos parametrizado!
+ 
 
 - Criar o modelo 
  . criar os nos  ->  setar a matriz A com os numeros das eq de quem existe e -1 de quem não existe

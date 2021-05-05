@@ -704,24 +704,56 @@ void ladderModel(unsigned int _n_elemL_part, unsigned int _n_elemD_part, double 
     cout <<"Fim"<< endl;
 }
 
+enum BORDER_TYPE
+{
+    PROG_X_REGR_Y,
+    REGR_X_REGR_Y,
+    CENT_X_REGR_Y,
+    PROG_X_CENT_Y,
+    REGR_X_CENT_Y,
+    CENT_X_CENT_Y,
+    PROG_X_PROG_Y,
+    REGR_X_PROG_Y,
+    CENT_X_PROG_Y
+};
+
 struct XY
 {
-    XY() : x (-1),y(-1){}
-    XY(int _x, int _y) : x (_x),y(_y){}
+    XY() : x (-1), y(-1), borderType(-1){}
+    XY(int _x, int _y, unsigned int _borderType) : x (_x),y(_y), borderType(_borderType){}
     int x;
     int y;
+    int borderType;
 };
 
 typedef Matrix<XY, Dynamic, Dynamic> NumEquationMatrix;
 
-void haunchedBeamModel(unsigned int n_elemL, unsigned int n_elemD, double L, double h,
-                       double l_haunch, double h_haunch, double p, P typeP)
+void haunchedBeamModel(double L, double l_haunch, double l_base, double H,
+                       double h_haunch, double b, double E, double nu, double p, P typeP,
+                       unsigned int n_xb)
 {
+    //valores calculados para plane strain
+    double lambda_planeStrain = (nu*E)/((1+nu)*(1-(2*nu)));
+    double mu = E/(2*(1+nu));
+
+    //lambda para plane stress
+    double lambda = (2*lambda_planeStrain*mu)/(lambda_planeStrain + 2*mu);
+
+    double hx = l_base/(n_xb - 1);
+    double hy = (hx*h_haunch)/(l_haunch - l_base);
+    unsigned int n_elemL = ceil(L/hx);
+    unsigned int n_elemH = ceil(H/hy);
+
+    unsigned int j_h_min = ceil(((n_xb -1)*l_haunch)/l_base);
+    unsigned int j_h_max = n_elemL - j_h_min;
+
+
+
 
     //-------------------------------------------------------------------
     //matriz que contem as equacoes associadas aos nós
-    NumEquationMatrix *A = new NumEquationMatrix(n_elemD+1, n_elemL+1);
-    //-1 restrito
+    NumEquationMatrix *A = new NumEquationMatrix(n_elemH+1, n_elemL+1);
+    //-1 não existe nó
 
     cout << "Criando matriz auxiliar" << endl;
     TimeSpent criandoATime("Criada matriz auxiliar | TEMPO: ");
@@ -737,73 +769,216 @@ void haunchedBeamModel(unsigned int n_elemL, unsigned int n_elemD, double L, dou
     unsigned int count = 0;
 
     //quantidade das linhas da matriz que fazem parte do retangulo de cima
-    unsigned int n_elemD_top = (n_elemD * (h))/(h + h_haunch);
+    unsigned int n_elemH_top = ceil((n_elemH * (H - h_haunch))/H);
     //criando as equações do retangulo de cima
-    for(unsigned int i = 0; i <= n_elemD_top; i++)
+    for(unsigned int i = 0; i <= n_elemH_top; i++)
     {
         for(unsigned int j = 0; j <= n_elemL; j++)
         {
-            (*A)(i,j) = XY(count, count+1);
+            unsigned int borderType;
+            //definindo os tipos de borda
+            if(j == 0) // j na ponta esquerda
+            {
+                if(i == 0) //i no topo
+                {
+                    borderType = BORDER_TYPE::PROG_X_REGR_Y;
+                }
+                else //i em qualquer outro ponto
+                {
+                    borderType = BORDER_TYPE::PROG_X_CENT_Y;
+                }
+            }
+            else if(j == n_elemL) //j na ponta direita
+            {
+                if(i == 0)//i no topo
+                {
+                    borderType = BORDER_TYPE::REGR_X_REGR_Y;
+                }
+                else //i em qualquer outro ponto
+                {
+                    borderType = BORDER_TYPE::REGR_X_CENT_Y;
+                }
+            }
+            else //j é qualquer outro sem ser os da ponta
+            {
+//                double j_hx = j*hx;
+                if(i == 0)//i no topo
+                {
+                    borderType = BORDER_TYPE::CENT_X_REGR_Y;
+                }
+                else if( (i == n_elemH_top) && ( j >= j_h_min ) && ( j <= j_h_max ) )
+//                    if( (i == n_elemH_top) && ( j_hx >= l_haunch ) && ( j_hx <= (L - l_haunch)) )
+                {
+                    borderType = BORDER_TYPE::CENT_X_PROG_Y;
+                }
+                else
+                {
+                    borderType = BORDER_TYPE::CENT_X_CENT_Y;
+                }
+            }
+
+            (*A)(i,j) = XY(count, count+1, borderType);
             count += 2;
         }
     }
 
 
-    unsigned int n_elemL_haunch = (n_elemL * (l_haunch))/(L);
-    unsigned int step_elemL = 1;
-    cout << "n_elemL_haunch = " << n_elemL_haunch << endl;
-    cout << "step_elemL = " << step_elemL << endl;
     //criando a mísula da esquerda
+    //parte quadrada
     unsigned int i, j;
-    for(i = n_elemD_top +1; i <= n_elemD; i++)
+    for(i = n_elemH_top +1; i <= n_elemH; i++)
     {
-        n_elemL_haunch -= step_elemL;
-        for(j = 0; j <= n_elemL_haunch; j++)
+        for(j = 0; j < n_xb-1; j++)
         {
-            (*A)(i,j) = XY(count, count+1);
-            count += 2;
+            unsigned int borderType;
+            if(i == n_elemH)
+            {
+                if(j == 0)
+                {
+                    borderType = BORDER_TYPE::PROG_X_PROG_Y;
+                }
+                else
+                {
+                    borderType = BORDER_TYPE::CENT_X_PROG_Y;
+                }
+            }
+            else
+            {
+                if(j == 0)
+                {
+                    borderType = BORDER_TYPE::PROG_X_CENT_Y;
+                }
+                else
+                {
+                    borderType = BORDER_TYPE::CENT_X_CENT_Y;
+                }
+            }
+
+            if( !((j == (n_xb-1)/2) && (i == n_elemH)))
+            {
+                (*A)(i,j) = XY(count, count+1, borderType);
+                count += 2;
+            }
         }
     }
-    //nó completamente preso
-    (*A)(i-1,j-1) = XY(-1, -1);
-    count -=2;
+    //parte triangular
+    unsigned int current_j_h_min = j_h_min;
+    for(i = n_elemH_top +1; i <= n_elemH; i++)
+    {
+        for(j = n_xb - 1; j < current_j_h_min; j++)
+        {
+            unsigned int borderType = BORDER_TYPE::CENT_X_CENT_Y;
+            if(j == current_j_h_min-1)
+            {
+                borderType  = BORDER_TYPE::REGR_X_PROG_Y;
+            }
+
+            (*A)(i,j) = XY(count, count+1, borderType);
+            count += 2;
+        }
+        current_j_h_min--;
+    }
 
 
-    n_elemL_haunch = (n_elemL * (l_haunch))/(L);
     //criando a mísula da direita
-    for(i = n_elemD_top +1; i <= n_elemD; i++)
+    //parte quadrada
+    for(i = n_elemH_top +1; i <= n_elemH; i++)
     {
-        n_elemL_haunch -= step_elemL;
-        for(j = n_elemL - n_elemL_haunch; j <= n_elemL; j++)
+        for(j = n_elemL - (n_xb -1) +1; j <= n_elemL; j++)
         {
-            (*A)(i,j) = XY(count, count+1);
+            unsigned int borderType;
+            if(i == n_elemH)
+            {
+                if(j == n_elemL)
+                {
+                    borderType = BORDER_TYPE::REGR_X_PROG_Y;
+                }
+                else
+                {
+                    borderType = BORDER_TYPE::CENT_X_PROG_Y;
+                }
+            }
+            else
+            {
+                if(j == n_elemL)
+                {
+                    borderType = BORDER_TYPE::REGR_X_CENT_Y;
+                }
+                else
+                {
+                    borderType = BORDER_TYPE::CENT_X_CENT_Y;
+                }
+            }
+
+            if( !((j == n_elemL - (n_xb-1)/2) && (i == n_elemH)))
+            {
+                (*A)(i,j) = XY(count, count+1, borderType);
+                count += 2;
+            }
+        }
+    }
+    //parte triangular
+    unsigned int current_j_h_max = j_h_max;
+    unsigned int max_j = n_elemL - (n_xb -1);
+    for(i = n_elemH_top +1; i <= n_elemH; i++)
+    {
+        for(j = current_j_h_max+1; j <= max_j; j++)
+        {
+            unsigned int borderType = BORDER_TYPE::CENT_X_CENT_Y;
+            if(j == current_j_h_max+1)
+            {
+                borderType  = BORDER_TYPE::PROG_X_PROG_Y;
+            }
+
+            (*A)(i,j) = XY(count, count+1, borderType);
             count += 2;
         }
+        current_j_h_max++;
     }
-    //nó completamente preso
-    count -=2;
-    (*A)(i-1,j-1) = XY(count++, -1);
 
 
 
-    //printando a matriz A
-    for(unsigned int i = 0; i < n_elemD+1; i++)
-    {
-        for(unsigned int j = 0; j < n_elemL+1; j++)
-        {
-            cout << (*A)(i,j).y << "\t";
-        }
-        cout  << endl;
-    }
     criandoATime.endCount();
     criandoATime.print();
 
 
+    //printando a matriz A
+    cout << "-----------------------x"<<endl;
+    for(unsigned int i = 0; i <= n_elemH; i++)
+    {
+        for(unsigned int j = 0; j <= n_elemL; j++)
+        {
+            cout << (*A)(i,j).x << " \t ";
+        }
+        cout  << endl;
+    }
+    cout << "-----------------------y"<<endl;
+    for(unsigned int i = 0; i <= n_elemH; i++)
+    {
+        for(unsigned int j = 0; j <= n_elemL; j++)
+        {
+            cout << (*A)(i,j).y << " \t ";
+        }
+        cout  << endl;
+    }
+    cout << "-----------------------tipo"<<endl;
+    for(unsigned int i = 0; i <= n_elemH; i++)
+    {
+        for(unsigned int j = 0; j <= n_elemL; j++)
+        {
+            cout << (*A)(i,j).borderType << " \t ";
+        }
+        cout  << endl;
+    }
 
-    //-------------------------------------------------------------------
+    delete A;
+
+
+//    //-------------------------------------------------------------------
 //    std::stringstream label;
 //    label.str("");
-//    label << "_L-"<<L<< "_D-"<<D<<"_Nl-"<<_n_elemL_part<<"_Nd-"<<_n_elemD_part<<"_p-"<<p<<"_tipo-"<<int(typeP)<<"COEFFK_Cholesky.txt";
+//    label << "_L-"<<L<< "_h-"<<h<<"_lH-"<<l_haunch<<"_hH-"<<h_haunch
+//          << "_Nl-"<<n_elemL<<"_Nd-"<<n_elemD<<"_p-"<<p<<"_tipo-"<<int(typeP)<<"COEFFK_Cholesky.txt";
 
 //    VectorXd f = VectorXd::Zero(count);
 //    SpMatrixD K;
@@ -811,69 +986,148 @@ void haunchedBeamModel(unsigned int n_elemL, unsigned int n_elemD, double L, dou
 //    VectorXd analytical = VectorXd::Zero(count);
 //    vector<T> coeffK;
 
+//    double hx = L/n_elemL;
+//    double hy = (h+h_haunch)/n_elemD;
+//    if(hx != hy)
+//    {
+//        cerr << "Não implementado ainda hx != hy" << endl;
+//        exit(1);
+//    }
 
-//    double hx = L/_n_elemL_part;
-//    double hy = D/_n_elemD_part;
-
-//    cout << "_n_elemL_part " << _n_elemL_part << endl;
-//    cout << "_n_elemD_part " << _n_elemD_part << endl;
 //    cout << "n_elemL " << n_elemL << endl;
 //    cout << "n_elemD " << n_elemD << endl;
 //    cout << "hx " << hx << endl;
 //    cout << "hy " << hy << endl;
-//    cout << "tamanho do sistema " << size << endl;
+//    cout << "Numero de equacoes " << count << endl;
 
-
-//    cout << "Preenchendo o sistema" << endl;
-//    TimeSpent preenchendoSistemaTime("Preenchido o sistema | TEMPO: ");
-//    preenchendoSistemaTime.startCount();
-//    //-------------------------------------------------------------------
-//    //preenchendo o sistema
-////    Eigen::initParallel();
-////    Eigen::setNbThreads(2);
-////    #pragma omp parallel for num_threads(2)
-//    for(unsigned int j = 1; j < n_elemL; j++)
+    cout << "Preenchendo o sistema" << endl;
+    TimeSpent preenchendoSistemaTime("Preenchido o sistema | TEMPO: ");
+    preenchendoSistemaTime.startCount();
+    //-------------------------------------------------------------------
+    //preenchendo o sistema
+//    for(unsigned int j = 0; j <= n_elemL; j++) // colunas de A -> x no sistema de coordenadas
 //    {
-//        for(unsigned int i = 1; i < n_elemD; i++)
+//        for(unsigned int i = 0; i <= n_elemD; i++)// linhas de A -> y no sistema de coordenadas
 //        {
-//            if((*A)(i, j) >= 0)
+//            if( i == 0 ) //linha
 //            {
-//                coeffK.push_back(T((*A)(i, j), (*A)(i, j), -4));
-////                cout << "Linha e coluna da matriz K  " <<(*A)(i, j)<< endl;
+//                if(j == 0) //coluna
+//                {
+//                    //para frente tanto em x quanto em y
+//                }
+//                else if (j == n_elemL) //coluna
+//                {
+//                    //para frente em y e para tras em x
+//                }
+//                else
+//                {
+//                    //para frente em y e centrada no x
+//                }
 //            }
-//            else continue;
-
-//            if((*A)(i-1, j) >= 0)
+//            else if (i == n_elemD) //linha
 //            {
-//                coeffK.push_back(T((*A)(i, j), (*A)(i-1, j), 1));
-////                cout << "Linha da matriz K  " <<(*A)(i, j)<< endl;
-////                cout << "Coluna da matriz K  " <<(*A)(i-1, j)<< endl;
+//                if(j == 0) //coluna
+//                {
+//                    //para frente em x e para tras em y
+//                }
+//                else if (j == n_elemL) //coluna
+//                {
+//                    //para tras tanto em x quanto em y
+//                }
+//                else
+//                {
+//                    //para tras em y e centrada no x
+//                }
 //            }
-
-//            if((*A)(i, j-1) >= 0)
+//            else
 //            {
-//                coeffK.push_back(T((*A)(i, j), (*A)(i, j-1), 1));
-////                cout << "Linha da matriz K  " <<(*A)(i, j)<< endl;
-////                cout << "Coluna da matriz K  " <<(*A)(i, j-1)<< endl;
+//                if(j == 0) //coluna
+//                {
+//                    //para frente em x e centrada em y
+//                }
+//                else if (j == n_elemL) //coluna
+//                {
+//                    //para tras em x centrada em y
+//                }
+//                else
+//                {
+//                    //centrada tanto em x quanto em y
+//                    //assumindo que os casos centrados são soltos nas duas direções
+
+//                    //adicionando as informações da direção X
+//                    if((*A)(i, j).x >= 0)
+//                    {
+////                        cout << "Linha e coluna da matriz K  " <<(*A)(i, j).x<< endl;
+//                        coeffK.push_back(T((*A)(i, j).x, (*A)(i, j).x, 8*lambda + 24*mu));
+//                        coeffK.push_back(T((*A)(i, j).y, (*A)(i, j).y, 8*lambda + 24*mu));
+
+//                        if((*A)(i-1, j).x >= 0) //cima e meio
+//                        {
+////                            cout << "Linha da matriz K  " <<(*A)(i, j).x<< endl;
+////                            cout << "Coluna da matriz K  " <<(*A)(i-1, j).x<< endl;
+//                            coeffK.push_back(T((*A)(i, j).x, (*A)(i-1, j).x, -4*mu));
+//                            coeffK.push_back(T((*A)(i, j).y, (*A)(i-1, j).y, -(4*mu + 8*mu)));
+//                        }
+
+//                        if((*A)(i+1, j).x >= 0) //baixo e meio
+//                        {
+////                            cout << "Linha da matriz K  " <<(*A)(i, j).x<< endl;
+////                            cout << "Coluna da matriz K  " <<(*A)(i+1, j).x<< endl;
+//                            coeffK.push_back(T((*A)(i, j).x, (*A)(i+1, j).x, -4*mu));
+//                            coeffK.push_back(T((*A)(i, j).y, (*A)(i+1, j).y, -(4*mu + 8*mu)));
+//                        }
+
+//                        if((*A)(i, j-1).x >= 0) //meio e esquerda
+//                        {
+////                            cout << "Linha da matriz K  " <<(*A)(i, j).x<< endl;
+////                            cout << "Coluna da matriz K  " <<(*A)(i, j-1).x<< endl;
+//                            coeffK.push_back(T((*A)(i, j).x, (*A)(i, j-1).x, -(4*lambda + 8*mu)));
+//                            coeffK.push_back(T((*A)(i, j).y, (*A)(i, j-1).y, 4*mu));
+//                        }
+
+//                        if((*A)(i, j+1).x >= 0) //meio e direita
+//                        {
+////                            cout << "Linha da matriz K  " <<(*A)(i, j).x<< endl;
+////                            cout << "Coluna da matriz K  " <<(*A)(i, j+1).x<< endl;
+//                            coeffK.push_back(T((*A)(i, j).x, (*A)(i, j+1).x, -(4*lambda + 8*mu)));
+//                            coeffK.push_back(T((*A)(i, j).y, (*A)(i, j+1).y, 4*mu));
+//                        }
+
+//                        if((*A)(i-1, j-1).x >= 0) //diagonal cima e esquerda
+//                        {
+//                            coeffK.push_back(T((*A)(i, j).x, (*A)(i-1, j-1).x, lambda + mu));
+//                            coeffK.push_back(T((*A)(i, j).y, (*A)(i-1, j-1).y, lambda + mu));
+//                        }
+
+//                        if((*A)(i+1, j-1).x >= 0) //diagonal baixo e esquerda
+//                        {
+//                            coeffK.push_back(T((*A)(i, j).x, (*A)(i+1, j-1).x, -(lambda + mu)));
+//                            coeffK.push_back(T((*A)(i, j).y, (*A)(i+1, j-1).y, -(lambda + mu)));
+//                        }
+
+//                        if((*A)(i-1, j+1).x >= 0) //diagonal cima e direita
+//                        {
+//                            coeffK.push_back(T((*A)(i, j).x, (*A)(i-1, j+1).x, -(lambda + mu)));
+//                            coeffK.push_back(T((*A)(i, j).y, (*A)(i-1, j+1).y, -(lambda + mu)));
+//                        }
+
+//                        if((*A)(i+1, j+1).x >= 0) //diagonal baixo e direita
+//                        {
+//                            coeffK.push_back(T((*A)(i, j).x, (*A)(i+1, j+1).x, lambda + mu));
+//                            coeffK.push_back(T((*A)(i, j).y, (*A)(i+1, j+1).y, lambda + mu));
+//                        }
+//                    }
+
+//                    //adicionando as informações da direção Y
+
+
+//                }
 //            }
 
-//            if((*A)(i+1, j) >= 0)
-//            {
-//                coeffK.push_back(T((*A)(i, j), (*A)(i+1, j), 1));
-////                cout << "Linha da matriz K  " <<(*A)(i, j)<< endl;
-////                cout << "Coluna da matriz K  " <<(*A)(i+1, j)<< endl;
-//            }
-
-//            if((*A)(i, j+1) >= 0)
-//            {
-//                coeffK.push_back(T((*A)(i, j), (*A)(i, j+1), 1));
-////                cout << "Linha da matriz K  " <<(*A)(i, j)<< endl;
-////                cout << "Coluna da matriz K  " <<(*A)(i, j+1)<< endl;
-//            }
 
 
-//            Vector2d pos(hx*j, D - (hy*i));
-////            cout << "posição" <<pos<< endl<<endl<<endl;
+//            Vector2d pos(hx*j, (hy*i));
+//            cout << "posição" <<pos<< endl<<endl<<endl;
 
 //            f.coeffRef((*A)(i, j), 0) = hx*hy * pFunction(typeP, p, pos);
 //        }
@@ -886,11 +1140,11 @@ void haunchedBeamModel(unsigned int n_elemL, unsigned int n_elemD, double L, dou
 //    preenchendoSistemaTime.endCount();
 //    preenchendoSistemaTime.print();
 
-////    cout << "\n\nK " <<endl;
-////    cout << MatrixXd(K)<<endl;
+//    cout << "\n\nK " <<endl;
+//    cout << MatrixXd(K)<<endl;
 
-////    cout << "\n\nf"<<endl;
-////    cout << MatrixXd(f)<<endl;
+//    cout << "\n\nf"<<endl;
+//    cout << MatrixXd(f)<<endl;
 
 
 //    cout << "Resolvendo o sistema" << endl;
@@ -936,19 +1190,21 @@ int main(int argc, char *argv[])
 //        n_elemL = n_elemD= atoi(argv[1]);
     //ladderModel(n_elemL, n_elemD, L, D, p, typeP);
 
-    unsigned int n_elemL = 40; //numero de elementos em cada direção X
-    unsigned int n_elemD = 12; //numero de elementos em cada direção Y
     double L = 12; //largura total (m)
-    double h = 1.2; //altura da parte reta
-    double l_haunch = 2.4; //tamanho da misula
-    double h_haunch = 2.4; //tamanho da misula
-    double p = 1000;   //constante para a função p
+    double H = 0.6; //altura total
+    double l_haunch = 0.5; //tamanho da misula
+    double l_base = 0.1; //tamanho da base reta da misula
+    double h_haunch = 0.2; //tamanho da misula
+    double b = 0.3; //thickness
+    double p = 5000;   //constante para a função p
+    double E = 2.21*pow(10, 10); //concreto
+    double nu = 0.15;
     P typeP = P::CONSTANT;
-    if(argc>1){
-        n_elemL = atoi(argv[1]);
-        n_elemD= atoi(argv[2]);
-    }
-    haunchedBeamModel(n_elemL, n_elemD, L, h, l_haunch, h_haunch, p, typeP);
+    unsigned int n_xb = 3 ; //numero de nós na base (número impar!)
+
+
+    haunchedBeamModel(L, l_haunch, l_base, H,
+                      h_haunch, b, E, nu, p, typeP, n_xb);
 
     return 0;
 }
