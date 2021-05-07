@@ -13,6 +13,9 @@
  . E = 2.21*10^10   << concreto    -> I = T*D^3/12
  . nu = 0.15
  
+ 5000 <<<< total da força que será distribuida pelos nós!
+ 
+ 
  TODO 
 [OK] - deflexao maxima de 1 cm >>> descobrir a altura e b (provavelmente 0.2)  
 [OK] - Ajeitar a carga distribuida 
