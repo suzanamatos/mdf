@@ -415,6 +415,59 @@ void saveDisplacements(const std::stringstream &_label, double _L, double _D,
     delete A;
 }
 
+void saveDisplacementsHaunch(const std::stringstream &_label, double _L, double _H,
+                           double _hx, double _hy, unsigned int _n_elemL, unsigned int _n_elemH,
+                           NumEquationMatrix *_A, const VectorXd &_x)
+{
+    std::stringstream outputFileName;
+    outputFileName.str("");
+    #if VEUSZ
+        outputFileName<<"_haunch_resultado_VEUSZ" << _label.str();
+    #else
+        outputFileName<<"_haunch_resultado" << _label.str();
+    #endif
+    cout << outputFileName.str()<<endl;
+    ofstream resultFile(outputFileName.str(), std::ofstream::out);
+
+
+    if (!resultFile.is_open())
+    {
+        cerr<<"[MAIN] o arquivo de resultado não foi aberto"<<endl;
+        exit(1);
+    }
+
+
+    resultFile << "\"" << "Label" << "\"\t"
+               << "\"" << "x_pos" << "\"\t"
+               << "\"" << "y_pos" << "\"\t"
+               << "\"" << "x_defl" << "\"\t"
+               << "\"" << "y_defl" << "\"\t\n";
+
+
+
+    for(unsigned int i = 0; i <= _n_elemH; i++) // linhas de A -> y no sistema de coordenadas
+    {
+        for(unsigned int j = 0; j <= _n_elemL; j++)// colunas de A -> x no sistema de coordenadas
+        {
+            if( (*_A)(i,j).x != -1  )
+            {
+                resultFile << (*_A)(i,j).x << "\t" << j*_hx << "\t" <<_H-(i*_hy) << "\t"
+                           <<(_x((*_A)(i,j).x)) <<"\t";
+                if((*_A)(i,j).y != -1)
+                {
+                    resultFile  <<  (_x((*_A)(i,j).y)) << endl;
+                }
+                else
+                {
+                    resultFile  <<  0 << endl;
+                }
+
+            }
+        }
+    }
+
+}
+
 void quadModel(unsigned int n_elem, double L, double p, P typeP)
 {
     //-------------------------------------------------------------------
@@ -725,6 +778,8 @@ void ladderModel(unsigned int _n_elemL_part, unsigned int _n_elemD_part, double 
     TimeSpent salvandoTime("Salvo o resultado | TEMPO: ");
     salvandoTime.startCount();
     saveDisplacements(label, L, D, hx, hy, n_elemL, n_elemD, _n_elemL_part, _n_elemD_part, x);
+    salvandoTime.endCount();
+    salvandoTime.print();
 
     cout <<"Fim"<< endl;
 }
@@ -924,7 +979,13 @@ void haunchedBeamModel(double L, double l_haunch, double l_base, double H,
                 }
             }
 
-            if( !((j == n_elemL - (n_xb-1)/2) && (i == n_elemH)))
+            if( ((j == n_elemL - (n_xb-1)/2) && (i == n_elemH)))
+            {
+                (*A)(i,j) = XY(count, -1, borderType);
+                count += 1;
+//                (*A)(i,j) = XY(-1, -1, -1);
+            }
+            else
             {
                 (*A)(i,j) = XY(count, count+1, borderType);
                 count += 2;
@@ -956,7 +1017,7 @@ void haunchedBeamModel(double L, double l_haunch, double l_base, double H,
     criandoATime.print();
 
 
-    //printando a matriz A
+//    //printando a matriz A
 //    cout << "-----------------------x"<<endl;
 //    for(unsigned int i = 0; i <= n_elemH; i++)
 //    {
@@ -991,8 +1052,9 @@ void haunchedBeamModel(double L, double l_haunch, double l_base, double H,
     label.str("");
     label << "_L-"<<L<<"_l-h-"<<l_haunch<<"_l-b-"<<l_base<< "_H-"<<H<<"_h-h-"<<h_haunch << "_b-" << b
           << "_E-" << E << "_nu-" << nu << "_n-xb-" << n_xb
-          <<"_p-"<<p<<"_tipo-"<<int(typeP)<<"COEFFK_Cholesky.txt";
+          <<"_p-"<<p<<"_tipo-"<<int(typeP)<<"COEFFK_LU.txt";
 
+    cout << "count " << count << endl;
     VectorXd f = VectorXd::Zero(count);
     SpMatrixD K;
     K.resize(count, count);
@@ -1027,7 +1089,7 @@ void haunchedBeamModel(double L, double l_haunch, double l_base, double H,
                          (2)
                     */
 
-                    f.coeffRef((*A)(i, j).y, 0) =  -forcePerNode/2.;
+                    f.coeffRef((*A)(i, j).y, 0) =  forcePerNode/2.;
 
                     //adicionando as informações da direção X e Y
                     coeffK.push_back(T((*A)(i, j).x, (*A)(i, j).x, (hy_2*lambda-hx*hy*lambda+2*hy_2*mu-hx*hy*mu+hx_2*mu)/(hx_2*hy_2)));
@@ -1095,7 +1157,7 @@ void haunchedBeamModel(double L, double l_haunch, double l_base, double H,
                     */
 
 
-                    f.coeffRef((*A)(i, j).y, 0) =  -forcePerNode/2.;
+                    f.coeffRef((*A)(i, j).y, 0) =  forcePerNode/2.;
 
                     //adicionando as informações da direção X e Y
                     coeffK.push_back(T((*A)(i, j).x, (*A)(i, j).x, (hy_2*lambda+hx*hy*lambda+2*hy_2*mu+hx*hy*mu+hx_2*mu)/(hx_2*hy_2)));
@@ -1163,7 +1225,7 @@ void haunchedBeamModel(double L, double l_haunch, double l_base, double H,
                            (2)
                     */
 
-                    f.coeffRef((*A)(i, j).y, 0) =  -forcePerNode;
+                    f.coeffRef((*A)(i, j).y, 0) =  forcePerNode;
 
                     //adicionando as informações da direção X e Y
                     coeffK.push_back(T((*A)(i, j).x, (*A)(i, j).x, -(2*hy_2*lambda+4*hy_2*mu-hx_2*mu)/(hx_2*hy_2)));
@@ -1330,61 +1392,103 @@ void haunchedBeamModel(double L, double l_haunch, double l_base, double H,
                     if((*A)(i, j-1).x >= 0) //meio e esquerda 1
                     {
                         coeffK.push_back(T((*A)(i, j).x, (*A)(i, j-1).x, -2*(lambda+2*mu)/hx_2));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i, j-1).y, -2*mu/hx_2));
                     }
                     else
                     {
                         cout << "[REGR_X_CENT_Y] errou em ((*A)(i, j-1).x >= 0) " << i +1 << " - " << j +1 << endl;
                     }
+                    if((*A)(i, j-1).y >= 0) //meio e esquerda 1
+                    {
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i, j-1).y, -2*mu/hx_2));
+                    }
+                    else
+                    {
+                        cout << "[REGR_X_CENT_Y] errou em ((*A)(i, j-1).y >= 0) " << i +1 << " - " << j +1 << endl;
+                    }
 
                     if((*A)(i, j-2).x >= 0) //meio e esquerda esquerda 2
                     {
                         coeffK.push_back(T((*A)(i, j).x, (*A)(i, j-2).x, (lambda+2*mu)/hx_2));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i, j-2).y, mu/hx_2));
                     }
                     else
                     {
                         cout << "[REGR_X_CENT_Y] errou em ((*A)(i, j-2).x >= 0) " << i +1 << " - " << j +1 << endl;
                     }
+                    if((*A)(i, j-2).y >= 0) //meio e esquerda esquerda 2
+                    {
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i, j-2).y, mu/hx_2));
+                    }
+                    else
+                    {
+                        cout << "[REGR_X_CENT_Y] errou em ((*A)(i, j-2).y >= 0) " << i +1 << " - " << j +1 << endl;
+                    }
 
                     if((*A)(i-1, j).x >= 0) //cima e meio 3
                     {
                         coeffK.push_back(T((*A)(i, j).x, (*A)(i-1, j).x, mu/hy_2 + (lambda+mu)/(2*hx*hy)));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-1, j).y, (lambda+2*mu)/hy_2 + (lambda+mu)/(2*hx*hy)));
                     }
                     else
                     {
                         cout << "[REGR_X_CENT_Y] errou em ((*A)(i-1, j).x >= 0) " << i +1 << " - " << j +1 << endl;
                     }
+                    if((*A)(i-1, j).y >= 0) //cima e meio 3
+                    {
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-1, j).y, (lambda+2*mu)/hy_2 + (lambda+mu)/(2*hx*hy)));
+                    }
+                    else
+                    {
+                        cout << "[REGR_X_CENT_Y] errou em ((*A)(i-1, j).y >= 0) " << i +1 << " - " << j +1 << endl;
+                    }
 
                     if((*A)(i+1, j).x >= 0) //baixo e meio 4
                     {
                         coeffK.push_back(T((*A)(i, j).x, (*A)(i+1, j).x, mu/hy_2 - (lambda+mu)/(2*hx*hy)));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i+1, j).y, (lambda+2*mu)/hy_2 - (lambda+mu)/(2*hx*hy)));
                     }
                     else
                     {
                         cout << "[REGR_X_CENT_Y] errou em ((*A)(i+1, j).x >= 0) " << i +1 << " - " << j +1 << endl;
                     }
+                    if((*A)(i+1, j).y >= 0) //baixo e meio 4
+                    {
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i+1, j).y, (lambda+2*mu)/hy_2 - (lambda+mu)/(2*hx*hy)));
+                    }
+                    else
+                    {
+                        cout << "[REGR_X_CENT_Y] errou em ((*A)(i+1, j).y >= 0) " << i +1 << " - " << j +1 << endl;
+                    }
 
                     if((*A)(i-1, j-1).x >= 0) //diagonal cima e esquerda 5
                     {
                         coeffK.push_back(T((*A)(i, j).x, (*A)(i-1, j-1).x, -(lambda + mu)/(2*hx*hy)));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-1, j-1).y, -(lambda + mu)/(2*hx*hy)));
                     }
                     else
                     {
                         cout << "[REGR_X_CENT_Y] errou em ((*A)(i-1, j-1).x >= 0) " << i +1 << " - " << j +1 << endl;
                     }
+                    if((*A)(i-1, j-1).y >= 0) //diagonal cima e esquerda 5
+                    {
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-1, j-1).y, -(lambda + mu)/(2*hx*hy)));
+                    }
+                    else
+                    {
+                        cout << "[REGR_X_CENT_Y] errou em ((*A)(i-1, j-1).y >= 0) " << i +1 << " - " << j +1 << endl;
+                    }
 
                     if((*A)(i+1, j-1).x >= 0) //diagonal baixo e esquerda 6
                     {
                         coeffK.push_back(T((*A)(i, j).x, (*A)(i+1, j-1).x, (lambda + mu)/(2*hx*hy)));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i+1, j-1).y, (lambda + mu)/(2*hx*hy)));
                     }
                     else
                     {
                         cout << "[REGR_X_CENT_Y] errou em ((*A)(i+1, j-1).x >= 0) " << i +1 << " - " << j +1 << endl;
+                    }
+                    if((*A)(i+1, j-1).y >= 0) //diagonal baixo e esquerda 6
+                    {
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i+1, j-1).y, (lambda + mu)/(2*hx*hy)));
+                    }
+                    else
+                    {
+                        cout << "[REGR_X_CENT_Y] errou em ((*A)(i+1, j-1).y >= 0) " << i +1 << " - " << j +1 << endl;
                     }
 
                     break;
@@ -1401,87 +1505,143 @@ void haunchedBeamModel(double L, double l_haunch, double l_base, double H,
 
 
                     //adicionando as informações da direção X e Y
-                    coeffK.push_back(T((*A)(i, j).x, (*A)(i, j).x, -2*(hy_2*lambda + 2*hy_2*mu + hx_2*mu)/(hx_2*hy_2)));
-                    coeffK.push_back(T((*A)(i, j).y, (*A)(i, j).y, -2*(hx_2*lambda + hy_2*mu + 2*hx_2*mu)/(hx_2*hy_2)));
+                    coeffK.push_back(T((*A)(i, j).x, (*A)(i, j).x, -2*(hy_2*lambda+2*hy_2*mu+hx_2*mu)/(hx_2*hy_2)));
+                    coeffK.push_back(T((*A)(i, j).y, (*A)(i, j).y, -2*(hx_2*lambda+hy_2*mu+2*hx_2*mu)/(hx_2*hy_2)));
 
                     if((*A)(i-1, j).x >= 0) //cima e meio 1
                     {
                         coeffK.push_back(T((*A)(i, j).x, (*A)(i-1, j).x, mu/hy_2));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-1, j).y, (lambda+2*mu)/hy_2));
                     }
                     else
                     {
                         cout << "[CENT_X_CENT_Y] errou em ((*A)(i-1, j).x >= 0) " << i +1 << " - " << j +1 << endl;
                     }
+                    if((*A)(i-1, j).y >= 0) //cima e meio 1
+                    {
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-1, j).y, (lambda+2*mu)/hy_2));
+                    }
+                    else
+                    {
+                        cout << "[CENT_X_CENT_Y] errou em ((*A)(i-1, j).y >= 0) " << i +1 << " - " << j +1 << endl;
+                    }
 
                     if((*A)(i+1, j).x >= 0) //baixo e meio 2
                     {
                         coeffK.push_back(T((*A)(i, j).x, (*A)(i+1, j).x, mu/hy_2));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i+1, j).y, (lambda+2*mu)/hy_2));
                     }
                     else
                     {
                         cout << "[CENT_X_CENT_Y] errou em ((*A)(i+1, j).x >= 0) " << i +1 << " - " << j +1 << endl;
                     }
+                    if((*A)(i+1, j).y >= 0) //baixo e meio 2
+                    {
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i+1, j).y, (lambda+2*mu)/hy_2));
+                    }
+                    else
+                    {
+                        cout << "[CENT_X_CENT_Y] errou em ((*A)(i+1, j).y >= 0) " << i +1 << " - " << j +1 << endl;
+                    }
 
                     if((*A)(i, j-1).x >= 0) //meio e esquerda 3
                     {
                         coeffK.push_back(T((*A)(i, j).x, (*A)(i, j-1).x, (lambda+2*mu)/hx_2));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i, j-1).y, mu/hx_2));
                     }
                     else
                     {
                         cout << "[CENT_X_CENT_Y] errou em ((*A)(i, j-1).x >= 0) " << i +1 << " - " << j +1 << endl;
                     }
+                    if((*A)(i, j-1).y >= 0) //meio e esquerda 3
+                    {
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i, j-1).y, mu/hx_2));
+                    }
+                    else
+                    {
+                        cout << "[CENT_X_CENT_Y] errou em ((*A)(i, j-1).y >= 0) " << i +1 << " - " << j +1 << endl;
+                    }
 
                     if((*A)(i, j+1).x >= 0) //meio e direita 4
                     {
                         coeffK.push_back(T((*A)(i, j).x, (*A)(i, j+1).x, (lambda+2*mu)/hx_2));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i, j+1).y, mu/hx_2));
                     }
                     else
                     {
                         cout << "[CENT_X_CENT_Y] errou em ((*A)(i, j+1).x >= 0) " << i +1 << " - " << j +1 << endl;
                     }
-
-                    if((*A)(i-1, j-1).x >= 0) //diagonal cima e esquerda 5
+                    if((*A)(i, j+1).y >= 0) //meio e direita 4
                     {
-                        coeffK.push_back(T((*A)(i, j).x, (*A)(i-1, j-1).x, -(lambda + mu)/(4*hx*hy)));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-1, j-1).y, -(lambda + mu)/(4*hx*hy)));
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i, j+1).y, mu/hx_2));
+                    }
+                    else
+                    {
+                        cout << "[CENT_X_CENT_Y] errou em ((*A)(i, j+1).y >= 0) " << i +1 << " - " << j +1 << endl;
+                    }
+
+                    if((*A)(i-1, j-1).y >= 0) //diagonal cima e esquerda 5
+                    {
+                        coeffK.push_back(T((*A)(i, j).x, (*A)(i-1, j-1).y, -(lambda + mu)/(4*hx*hy)));
                     }
                     else
                     {
                         cout << "[CENT_X_CENT_Y] errou em ((*A)(i-1, j-1).x >= 0) " << i +1 << " - " << j +1 << endl;
                     }
-
-                    if((*A)(i+1, j-1).x >= 0) //diagonal baixo e esquerda 6
+                    if((*A)(i-1, j-1).x >= 0) //diagonal cima e esquerda 5
                     {
-                        coeffK.push_back(T((*A)(i, j).x, (*A)(i+1, j-1).x, (lambda + mu)/(4*hx*hy)));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i+1, j-1).y, (lambda + mu)/(4*hx*hy)));
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-1, j-1).x, -(lambda + mu)/(4*hx*hy)));
+                    }
+                    else
+                    {
+                        cout << "[CENT_X_CENT_Y] errou em ((*A)(i-1, j-1).y >= 0) " << i +1 << " - " << j +1 << endl;
+                    }
+
+                    if((*A)(i+1, j-1).y >= 0) //diagonal baixo e esquerda 6
+                    {
+                        coeffK.push_back(T((*A)(i, j).x, (*A)(i+1, j-1).y, (lambda + mu)/(4*hx*hy)));
                     }
                     else
                     {
                         cout << "[CENT_X_CENT_Y] errou em ((*A)(i+1, j-1).x >= 0) " << i +1 << " - " << j +1 << endl;
                     }
+                    if((*A)(i+1, j-1).x >= 0) //diagonal baixo e esquerda 6
+                    {
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i+1, j-1).x, (lambda + mu)/(4*hx*hy)));
+                    }
+                    else
+                    {
+                        cout << "[CENT_X_CENT_Y] errou em ((*A)(i+1, j-1).y >= 0) " << i +1 << " - " << j +1 << endl;
+                    }
 
+                    if((*A)(i-1, j+1).y >= 0) //diagonal cima e direita 7
+                    {
+                        coeffK.push_back(T((*A)(i, j).x, (*A)(i-1, j+1).y, (lambda + mu)/(4*hx*hy)));
+                    }
+                    else
+                    {
+                        cout << "[CENT_X_CENT_Y] errou em ((*A)(i-1, j+1).x >= 0) " << i +1 << " - " << j +1 << endl;
+                    }
                     if((*A)(i-1, j+1).x >= 0) //diagonal cima e direita 7
                     {
-                        coeffK.push_back(T((*A)(i, j).x, (*A)(i-1, j+1).x, (lambda + mu)/(4*hx*hy)));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-1, j+1).y, (lambda + mu)/(4*hx*hy)));
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-1, j+1).x, (lambda + mu)/(4*hx*hy)));
                     }
                     else
                     {
                         cout << "[CENT_X_CENT_Y] errou em ((*A)(i-1, j+1).x >= 0) " << i +1 << " - " << j +1 << endl;
                     }
 
-                    if((*A)(i+1, j+1).x >= 0) //diagonal baixo e direita 8
+                    if((*A)(i+1, j+1).y >= 0) //diagonal baixo e direita 8
                     {
-                        coeffK.push_back(T((*A)(i, j).x, (*A)(i+1, j+1).x, -(lambda + mu)/(4*hx*hy)));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i+1, j+1).y, -(lambda + mu)/(4*hx*hy)));
+                        coeffK.push_back(T((*A)(i, j).x, (*A)(i+1, j+1).y, -(lambda + mu)/(4*hx*hy)));
                     }
                     else
                     {
                         cout << "[CENT_X_CENT_Y] errou em ((*A)(i+1, j+1).x >= 0) " << i +1 << " - " << j +1 << endl;
+                    }
+                    if((*A)(i+1, j+1).x >= 0) //diagonal baixo e direita 8
+                    {
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i+1, j+1).x, -(lambda + mu)/(4*hx*hy)));
+                    }
+                    else
+                    {
+                        cout << "[CENT_X_CENT_Y] errou em ((*A)(i+1, j+1).y >= 0) " << i +1 << " - " << j +1 << endl;
                     }
                     break;
                 }
@@ -1503,52 +1663,89 @@ void haunchedBeamModel(double L, double l_haunch, double l_base, double H,
                     if((*A)(i-1, j).x >= 0) //cima e meio 1
                     {
                         coeffK.push_back(T((*A)(i, j).x, (*A)(i-1, j).x, -(hy*lambda+hy*mu+2*hx*mu)/(hx*hy_2)));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-1, j).y, -(hy*lambda+2*hx*lambda+hy*mu+4*hx*mu)/(hx*hy_2)));
                     }
                     else
                     {
                         cout << "[PROG_X_PROG_Y] errou em ((*A)(i-1, j).x >= 0) " << i +1 << " - " << j +1 << endl;
                     }
+                    if((*A)(i-1, j).y >= 0) //cima e meio 1
+                    {
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-1, j).y, -(hy*lambda+2*hx*lambda+hy*mu+4*hx*mu)/(hx*hy_2)));
+                    }
+                    else
+                    {
+                        cout << "[PROG_X_PROG_Y] errou em ((*A)(i-1, j).y >= 0) " << i +1 << " - " << j +1 << endl;
+                    }
+
 
                     if((*A)(i-2, j).x >= 0) //cima cima e meio 2
                     {
                         coeffK.push_back(T((*A)(i, j).x, (*A)(i-2, j).x, mu/hy_2));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-2, j).y, (lambda+2*mu)/hy_2));
                     }
                     else
                     {
                         cout << "[PROG_X_PROG_Y] errou em ((*A)(i-2, j).x >= 0) " << i +1 << " - " << j +1 << endl;
                     }
+                    if((*A)(i-2, j).y >= 0) //cima cima e meio 2
+                    {
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-2, j).y, (lambda+2*mu)/hy_2));
+                    }
+                    else
+                    {
+                        cout << "[PROG_X_PROG_Y] errou em ((*A)(i-2, j).y >= 0) " << i +1 << " - " << j +1 << endl;
+                    }
+
 
                     if((*A)(i, j+1).x >= 0) //meio e direita 3
                     {
                         coeffK.push_back(T((*A)(i, j).x, (*A)(i, j+1).x, -(2*hy*lambda+hx*lambda+4*hy*mu+hx*mu)/(hx_2*hy)));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i, j+1).y, -(hx*lambda+2*hy*mu+hx*mu)/(hx_2*hy)));
                     }
                     else
                     {
                         cout << "[PROG_X_PROG_Y] errou em ((*A)(i, j+1).x >= 0) " << i +1 << " - " << j +1 << endl;
+                    }
+                    if((*A)(i, j+1).y >= 0) //meio e direita 3
+                    {
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i, j+1).y, -(hx*lambda+2*hy*mu+hx*mu)/(hx_2*hy)));
+                    }
+                    else
+                    {
+                        cout << "[PROG_X_PROG_Y] errou em ((*A)(i, j+1).y >= 0) " << i +1 << " - " << j +1 << endl;
                     }
 
 
                     if((*A)(i, j+2).x >= 0) //meio e direita direita 4
                     {
                         coeffK.push_back(T((*A)(i, j).x, (*A)(i, j+2).x, (lambda+2*mu)/hx_2));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i, j+2).y, mu/hx_2));
                     }
                     else
                     {
                         cout << "[PROG_X_PROG_Y] errou em ((*A)(i, j+2).x >= 0) " << i +1 << " - " << j +1 << endl;
                     }
+                    if((*A)(i, j+2).y >= 0) //meio e direita direita 4
+                    {
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i, j+2).y, mu/hx_2));
+                    }
+                    else
+                    {
+                        cout << "[PROG_X_PROG_Y] errou em ((*A)(i, j+2).y >= 0) " << i +1 << " - " << j +1 << endl;
+                    }
 
                     if((*A)(i-1, j+1).x >= 0) //diagonal cima e direita 5
                     {
                         coeffK.push_back(T((*A)(i, j).x, (*A)(i-1, j+1).x, (lambda + mu)/(hx*hy)));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-1, j+1).y, (lambda + mu)/(hx*hy)));
                     }
                     else
                     {
                         cout << "[PROG_X_PROG_Y] errou em ((*A)(i-1, j+1).x >= 0) " << i +1 << " - " << j +1 << endl;
+                    }
+                    if((*A)(i-1, j+1).y >= 0) //diagonal cima e direita 5
+                    {
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-1, j+1).y, (lambda + mu)/(hx*hy)));
+                    }
+                    else
+                    {
+                        cout << "[PROG_X_PROG_Y] errou em ((*A)(i-1, j+1).y >= 0) " << i +1 << " - " << j +1 << endl;
                     }
                     break;
                 }
@@ -1570,53 +1767,88 @@ void haunchedBeamModel(double L, double l_haunch, double l_base, double H,
                     if((*A)(i-1, j).x >= 0) //cima e meio 1
                     {
                         coeffK.push_back(T((*A)(i, j).x, (*A)(i-1, j).x, (hy*lambda+hy*mu-2*hx*mu)/(hx*hy_2)));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-1, j).y, (hy*lambda-2*hx*lambda+hy*mu-4*hx*mu)/(hx*hy_2)));
                     }
                     else
                     {
                         cout << "[REGR_X_PROG_Y] errou em ((*A)(i-1, j).x >= 0) " << i +1 << " - " << j +1 << endl;
                     }
+                    if((*A)(i-1, j).y >= 0) //cima e meio 1
+                    {
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-1, j).y, (hy*lambda-2*hx*lambda+hy*mu-4*hx*mu)/(hx*hy_2)));
+                    }
+                    else
+                    {
+                        cout << "[REGR_X_PROG_Y] errou em ((*A)(i-1, j).y >= 0) " << i +1 << " - " << j +1 << endl;
+                    }
 
                     if((*A)(i-2, j).x >= 0) //cima cima e meio 2
                     {
                         coeffK.push_back(T((*A)(i, j).x, (*A)(i-2, j).x, mu/hy_2));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-2, j).y, (lambda+2*mu)/hy_2));
                     }
                     else
                     {
                         cout << "[REGR_X_PROG_Y] errou em ((*A)(i-2, j).x >= 0) " << i +1 << " - " << j +1 << endl;
+                    }                    
+                    if((*A)(i-2, j).y >= 0) //cima cima e meio 2
+                    {
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-2, j).y, (lambda+2*mu)/hy_2));
+                    }
+                    else
+                    {
+                        cout << "[REGR_X_PROG_Y] errou em ((*A)(i-2, j).y >= 0) " << i +1 << " - " << j +1 << endl;
                     }
 
                     if((*A)(i, j-1).x >= 0) //meio e esquerda 3
                     {
                         coeffK.push_back(T((*A)(i, j).x, (*A)(i, j-1).x, -(2*hy*lambda-hx*lambda+4*hy*mu-hx*mu)/(hx_2*hy)));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i, j-1).y, (hx*lambda-2*hy*mu+hx*mu)/(hx_2*hy)));
                     }
                     else
                     {
                         cout << "[REGR_X_PROG_Y] errou em ((*A)(i, j-1).x >= 0) " << i +1 << " - " << j +1 << endl;
+                    }                    
+                    if((*A)(i, j-1).y >= 0) //meio e esquerda 3
+                    {
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i, j-1).y, (hx*lambda-2*hy*mu+hx*mu)/(hx_2*hy)));
+                    }
+                    else
+                    {
+                        cout << "[REGR_X_PROG_Y] errou em ((*A)(i, j-1).y >= 0) " << i +1 << " - " << j +1 << endl;
                     }
 
 
                     if((*A)(i, j-2).x >= 0) //meio e esquerda esquerda 4
                     {
                         coeffK.push_back(T((*A)(i, j).x, (*A)(i, j-2).x, (lambda+2*mu)/hx_2));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i, j-2).y, mu/hx_2));
                     }
                     else
                     {
                         cout << "[REGR_X_PROG_Y] errou em ((*A)(i, j-2).x >= 0) " << i +1 << " - " << j +1 << endl;
+                    }                    
+                    if((*A)(i, j-2).y >= 0) //meio e esquerda esquerda 4
+                    {
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i, j-2).y, mu/hx_2));
+                    }
+                    else
+                    {
+                        cout << "[REGR_X_PROG_Y] errou em ((*A)(i, j-2).y >= 0) " << i +1 << " - " << j +1 << endl;
                     }
 
 
                     if((*A)(i-1, j-1).x >= 0) //diagonal cima e esquerda 5
                     {
                         coeffK.push_back(T((*A)(i, j).x, (*A)(i-1, j-1).x, -(lambda + mu)/(hx*hy)));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-1, j-1).y, -(lambda + mu)/(hx*hy)));
                     }
                     else
                     {
                         cout << "[REGR_X_PROG_Y] errou em ((*A)(i-1, j-1).x >= 0) " << i +1 << " - " << j +1 << endl;
+                    }
+                    if((*A)(i-1, j-1).y >= 0) //diagonal cima e esquerda 5
+                    {
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-1, j-1).y, -(lambda + mu)/(hx*hy)));
+                    }
+                    else
+                    {
+                        cout << "[REGR_X_PROG_Y] errou em ((*A)(i-1, j-1).y >= 0) " << i +1 << " - " << j +1 << endl;
                     }
 
                     break;
@@ -1630,71 +1862,115 @@ void haunchedBeamModel(double L, double l_haunch, double l_base, double H,
                          \  |  /
                        (3)-|0|-(4)
                     */
+                    //pensando no problema que virá caso o ponto seja preso em X e solto em Y, é preciso verificar se pode colocar em y os dados
 
 
-                    //adicionando as informações da direção X e Y
+                    bool setYAxis = ((*A)(i, j).y != -1);
+                    //adicionando as informações da direção X e verificando se pode incluir na direção Y
     //              cout << "Linha e coluna da matriz K  " <<(*A)(i, j).x<< endl;
                     coeffK.push_back(T((*A)(i, j).x, (*A)(i, j).x, -(2*hy_2*lambda+4*hy_2*mu-hx_2*mu)/(hx_2*hy_2)));
-                    coeffK.push_back(T((*A)(i, j).y, (*A)(i, j).y, (hx_2*lambda-2*hy_2*mu+2*hx_2*mu)/(hx_2*hy_2)));
+                    if(setYAxis) coeffK.push_back(T((*A)(i, j).y, (*A)(i, j).y, (hx_2*lambda-2*hy_2*mu+2*hx_2*mu)/(hx_2*hy_2)));
 
                     if((*A)(i-1, j).x >= 0) //cima e meio 1
                     {
                         coeffK.push_back(T((*A)(i, j).x, (*A)(i-1, j).x, -2*mu/hy_2));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-1, j).y, -2*(lambda+2*mu)/hy_2));
                     }
                     else
                     {
                         cout << "[CENT_X_PROG_Y] errou em ((*A)(i-1, j).x >= 0) " << i +1 << " - " << j +1 << endl;
                     }
+                    if( ((*A)(i-1, j).y >= 0) && setYAxis ) //cima e meio 1
+                    {
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-1, j).y, -2*(lambda+2*mu)/hy_2));
+                    }
+                    else
+                    {
+                        cout << "[CENT_X_PROG_Y] errou em ((*A)(i-1, j).y >= 0) " << i +1 << " - " << j +1 << endl;
+                    }
 
                     if((*A)(i-2, j).x >= 0) //cima cima e meio 2
                     {
                         coeffK.push_back(T((*A)(i, j).x, (*A)(i-2, j).x, mu/hy_2));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-2, j).y, (lambda+2*mu)/hy_2));
                     }
                     else
                     {
                         cout << "[CENT_X_PROG_Y] errou em ((*A)(i-2, j).x >= 0) " << i +1 << " - " << j +1 << endl;
                     }
+                    if(((*A)(i-2, j).y >= 0) && setYAxis) //cima cima e meio 2
+                    {
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-2, j).y, (lambda+2*mu)/hy_2));
+                    }
+                    else
+                    {
+                        cout << "[CENT_X_PROG_Y] errou em ((*A)(i-2, j).y >= 0) " << i +1 << " - " << j +1 << endl;
+                    }
 
                     if((*A)(i, j-1).x >= 0) //meio e esquerda 3
                     {
                         coeffK.push_back(T((*A)(i, j).x, (*A)(i, j-1).x, (lambda+mu)/(2*hx*hy) + (lambda+2*mu)/hx_2 ));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i, j-1).y, (lambda+mu)/(2*hx*hy) + mu/hx_2));
                     }
                     else
                     {
                         cout << "[CENT_X_PROG_Y] errou em ((*A)(i, j-1).x >= 0) " << i +1 << " - " << j +1 << endl;
                     }
+                    if(((*A)(i, j-1).y >= 0) && setYAxis )  //meio e esquerda 3
+                    {
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i, j-1).y, (lambda+mu)/(2*hx*hy) + mu/hx_2));
+                    }
+                    else
+                    {
+                        cout << "[CENT_X_PROG_Y] errou em ((*A)(i, j-1).y >= 0) " << i +1 << " - " << j +1 << endl;
+                    }
 
                     if((*A)(i, j+1).x >= 0) //meio e direita 4
                     {
                         coeffK.push_back(T((*A)(i, j).x, (*A)(i, j+1).x, -(lambda+mu)/(2*hx*hy) + (lambda+2*mu)/hx_2));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i, j+1).y, -(lambda+mu)/(2*hx*hy) + mu/hx_2));
                     }
                     else
                     {
                         cout << "[CENT_X_PROG_Y] errou em ((*A)(i, j+1).x >= 0) " << i +1 << " - " << j +1 << endl;
                     }
+                    if(((*A)(i, j+1).y >= 0) && setYAxis )  //meio e direita 4
+                    {
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i, j+1).y, -(lambda+mu)/(2*hx*hy) + mu/hx_2));
+                    }
+                    else
+                    {
+                        cout << "[CENT_X_PROG_Y] errou em ((*A)(i, j+1).y >= 0) " << i +1 << " - " << j +1 << endl;
+                    }
 
                     if((*A)(i-1, j-1).x >= 0) //diagonal cima e esquerda 5
                     {
                         coeffK.push_back(T((*A)(i, j).x, (*A)(i-1, j-1).x, -(lambda + mu)/(2*hx*hy)));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-1, j-1).y, -(lambda + mu)/(2*hx*hy)));
                     }
                     else
                     {
                         cout << "[CENT_X_PROG_Y] errou em ((*A)(i-1, j-1).x >= 0) " << i +1 << " - " << j +1 << endl;
                     }
+                    if(((*A)(i-1, j-1).y >= 0) && setYAxis )  //diagonal cima e esquerda 5
+                    {
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-1, j-1).y, -(lambda + mu)/(2*hx*hy)));
+                    }
+                    else
+                    {
+                        cout << "[CENT_X_PROG_Y] errou em ((*A)(i-1, j-1).y >= 0) " << i +1 << " - " << j +1 << endl;
+                    }
 
                     if((*A)(i-1, j+1).x >= 0) //diagonal cima e direita 6
                     {
                         coeffK.push_back(T((*A)(i, j).x, (*A)(i-1, j+1).x, (lambda + mu)/(2*hx*hy)));
-                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-1, j+1).y, (lambda + mu)/(2*hx*hy)));
                     }
                     else
                     {
                         cout << "[CENT_X_PROG_Y] errou em ((*A)(i-1, j+1).x >= 0) " << i +1 << " - " << j +1 << endl;
+                    }
+                    if(((*A)(i-1, j+1).y >= 0 ) && setYAxis ) //diagonal cima e direita 6
+                    {
+                        coeffK.push_back(T((*A)(i, j).y, (*A)(i-1, j+1).y, (lambda + mu)/(2*hx*hy)));
+                    }
+                    else
+                    {
+                        cout << "[CENT_X_PROG_Y] errou em ((*A)(i-1, j+1).y >= 0) " << i +1 << " - " << j +1 << endl;
                     }
 
                     break;
@@ -1709,14 +1985,15 @@ void haunchedBeamModel(double L, double l_haunch, double l_base, double H,
         }
     }
 
-    delete A;
 
 //    cout << " hx = " << hx << " ;  hy = " << hy << endl;
 //    cout << " lambda = " << lambda << " ;  mu = " << mu << endl << endl;
-//    for(unsigned int i = 0; i< coeffK.size(); i++)
-//    {
-//        cout << "K[" << coeffK[i].row() << ", "<< coeffK[i].col() << "] = " << coeffK[i].value() << endl;
-//    }
+    for(unsigned int i = 0; i< coeffK.size(); i++)
+    {
+        if(coeffK[i].row()==-1 || coeffK[i].col()==-1)
+            cout << "K[" << coeffK[i].row() << ", "<< coeffK[i].col() << "] = " << coeffK[i].value() << endl;
+    }
+
 
     K.setFromTriplets(coeffK.begin(), coeffK.end());
     coeffK.clear();
@@ -1730,26 +2007,71 @@ void haunchedBeamModel(double L, double l_haunch, double l_base, double H,
 //    cout << "\n\nf"<<endl;
 //    cout << MatrixXd(f)<<endl;
 
+//    cout << "Determinante de K " << MatrixXd(K).determinant() << endl;
 
     cout << "Resolvendo o sistema" << endl;
     TimeSpent resolvendoSistemaTime("Resolvido o sistema | TEMPO: ");
     resolvendoSistemaTime.startCount();
     //-------------------------------------------------------------------
-    //resolvendo o sistema
-    SimplicialCholesky<SpMatrixD> chol(K);
-    VectorXd x = chol.solve(f);
-    resolvendoSistemaTime.endCount();
-    resolvendoSistemaTime.print();
+    //resolvendo o sistema por cholesky
+//    SimplicialCholesky<SpMatrixD> chol(K);
+//    VectorXd x = chol.solve(f);
+//    resolvendoSistemaTime.endCount();
+//    resolvendoSistemaTime.print();
+
+    //resolvendo o sistema por LU
+    SparseLU<SpMatrixD> lu;
+    K.makeCompressed();
+    lu.analyzePattern(K);
+    lu.factorize(K);
+    if(lu.info()!=Success)
+    {
+        std::cout<<"\t\t\t\tnão conseguiu fatorar a matriz de !!!"<<std::endl;
+        exit(1);
+    }
+    cout << "!Determinante " << lu.logAbsDeterminant() << endl;
+    VectorXd x = lu.solve(-f);
+
+//    bool isSymmetric = false;
+//    lu.isSymmetric(isSymmetric);
+//    if (isSymmetric) cout << "é simetrico " << endl;
+//    else cout << "NAO é simetrico " << endl;
+//    cout <<"\n\n"<< MatrixXd(f)<<endl;
     cout <<"\n\n"<< MatrixXd(x)<<endl;
+
+    //--------------------------------------------------------------------
+//    cout << "Verificadndo o condicionamento da matriz" <<endl;
+//    VectorXcd eivals = MatrixXd(K).eigenvalues();
+////    cout << "autovalores \n" << eivals <<endl;
+
+//    std::vector<double> myvector;
+//    for(auto i = 0; i < eivals.rows(); i++)
+//        myvector.push_back(eivals[i].real());
+//    cout << "Adicionados e indo ordenar"<< endl;
+
+//    std::sort (myvector.begin(), myvector.end());
+////    for(auto i = 0; i < eivals.rows(); i++)
+////        cout << myvector[i] << " " << endl;
+//    cout << "Primeiro autovalor " << (myvector.front()) << endl;
+//    cout << "Ultimo autovalor " << myvector.back() << endl;
+
+//    cout <<"Numero de condicionamento:  "<< fabs(myvector.back())/fabs(myvector.front()) << endl;
+
+    //--------------------------------------------------------------------
+
 
 
 
     cout <<"acabou processo"<< endl;
 
-//    cout << "Salvando o resultado" << endl;
-//    TimeSpent salvandoTime("Salvo o resultado | TEMPO: ");
-//    salvandoTime.startCount();
-//    saveDisplacements(label, L, D, hx, hy, n_elemL, n_elemD, _n_elemL_part, _n_elemD_part, x);
+    cout << "Salvando o resultado" << endl;
+    TimeSpent salvandoTime("Salvo o resultado | TEMPO: ");
+    salvandoTime.startCount();
+    saveDisplacementsHaunch(label, L, H, hx, hy, n_elemL, n_elemH, A, x);
+    salvandoTime.endCount();
+    salvandoTime.print();
+
+    delete A;
 
     cout <<"Fim"<< endl;
 }
@@ -1775,16 +2097,16 @@ int main(int argc, char *argv[])
     //ladderModel(n_elemL, n_elemD, L, D, p, typeP);
 
     double L = 12; //largura total (m)
-    double H = 0.6; //altura total
     double l_haunch = 0.5; //tamanho da misula
     double l_base = 0.1; //tamanho da base reta da misula
+    double H = 0.6; //altura total
     double h_haunch = 0.2; //tamanho da misula
     double b = 0.3; //thickness
-    double p = 5000;   //constante para a função p
+    double p = -5000;   //constante para a função p
     double E = 2.21*pow(10, 10); //concreto
     double nu = 0.15;
     P typeP = P::CONSTANT;
-    unsigned int n_xb = 3 ; //numero de nós na base (número impar!)
+    unsigned int n_xb = 3; //numero de nós na base (número impar!)
 
 
     haunchedBeamModel(L, l_haunch, l_base, H,
