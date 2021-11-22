@@ -20,6 +20,7 @@ typedef Triplet<double> T;
 enum P
 {
     CONSTANT,
+    PATCH_TEST,
     SINSIN,
     POISSON_2,
     POISSON_EXTRA
@@ -53,6 +54,7 @@ typedef Matrix<XY, Dynamic, Dynamic> NumEquationMatrix;
 double pFunction(P _typeP, double _constant, const Vector2d &_x = Vector2d(0,0))
 {
     switch (_typeP) {
+    case PATCH_TEST:
     case POISSON_EXTRA:
     case POISSON_2:
     case CONSTANT:
@@ -80,6 +82,9 @@ double calculateError(double _calculated, double _analytical)
 double calculateAnalytical(P _typeP, double _constant, const Vector2d &_x, double L)
 {
     switch (_typeP) {
+    case PATCH_TEST:
+        return _x(0)+_x(1);
+        break;
     case POISSON_EXTRA:
     case CONSTANT:
         cout << "Não implementado resultado analítico" <<endl;
@@ -468,6 +473,7 @@ void saveDisplacementsHaunch(const std::stringstream &_label, double _L, double 
 
 }
 
+
 void quadModel(unsigned int n_elem, double L, double p, P typeP)
 {
     //-------------------------------------------------------------------
@@ -475,13 +481,16 @@ void quadModel(unsigned int n_elem, double L, double p, P typeP)
     MatrixXd *A = new MatrixXd(n_elem+1, n_elem+1);
     A->setConstant(-1);
     unsigned int size = (n_elem-1)*(n_elem-1);
-    VectorXd f = VectorXd::Zero(size);
-    SpMatrixD K;
+//    VectorXd f = VectorXd::Zero(size);
+    SpMatrixD K, f;
     K.resize(size, size);
     K.reserve(size*5);
+    f.resize(size, 1);
+    f.reserve(size);
     VectorXd analytical = VectorXd::Zero(size);
-    vector<T> coeffK;
+    vector<T> coeffK, coeffF;
     coeffK.reserve(size*5);
+    coeffF.reserve(size);
 
     cout << "total memory (resrvado) " << size*5*sizeof(T)/(1e6) << endl;
 
@@ -513,6 +522,7 @@ void quadModel(unsigned int n_elem, double L, double p, P typeP)
     criandoATime.endCount();
     criandoATime.print();
 
+//    cout << *A << endl<< endl<< endl;
 
     cout << "Preenchendo o sistema" << endl;
     TimeSpent preenchendoSistemaTime("Preenchido o sistema | TEMPO: ");
@@ -526,23 +536,43 @@ void quadModel(unsigned int n_elem, double L, double p, P typeP)
     {
         for(unsigned int i = 1; i < n_elem; i++)
         {
+
+
             if((*A)(i-1, j) >= 0)
                 coeffK.push_back(T((*A)(i, j), (*A)(i-1, j), 1));
+            else if(typeP == P::PATCH_TEST)
+            {
+                coeffF.push_back(T((*A)(i, j), 0, -(h*(i-1) + h*j) ));
+            }
 
             if((*A)(i, j-1) >= 0)
                 coeffK.push_back(T((*A)(i, j), (*A)(i, j-1), 1));
+            else if(typeP == P::PATCH_TEST)
+            {
+                coeffF.push_back(T((*A)(i, j), 0, -(h*(i) + h*(j-1))  ));
+            }
 
             if((*A)(i+1, j) >= 0)
                 coeffK.push_back(T((*A)(i, j), (*A)(i+1, j), 1));
+            else if(typeP == P::PATCH_TEST)
+            {
+                coeffF.push_back(T((*A)(i, j), 0, -(h*(i+1) + h*j) ));
+            }
 
             if((*A)(i, j+1) >= 0)
                 coeffK.push_back(T((*A)(i, j), (*A)(i, j+1), 1));
+            else if(typeP == P::PATCH_TEST)
+            {
+                coeffF.push_back(T((*A)(i, j), 0, -(h*(i) + h*(j+1))  ));
+            }
 
             coeffK.push_back(T((*A)(i, j), (*A)(i, j), -4));
 
             Vector2d pos(h*i, h*j);
 
-            f.coeffRef((*A)(i, j), 0) = h*h * pFunction(typeP, p, pos);
+            if(typeP != P::PATCH_TEST)
+                coeffF.push_back( T((*A)(i, j), 0, h*h * pFunction(typeP, p, pos)) );
+
             analytical((*A)(i, j)) = calculateAnalytical(typeP, p, pos, L);
         }
     }
@@ -552,6 +582,10 @@ void quadModel(unsigned int n_elem, double L, double p, P typeP)
     K.setFromTriplets(coeffK.begin(), coeffK.end());
     coeffK.clear();
     K.makeCompressed();
+
+    f.setFromTriplets(coeffF.begin(), coeffF.end());
+    coeffF.clear();
+    f.makeCompressed();
     preenchendoSistemaTime.endCount();
     preenchendoSistemaTime.print();
 
@@ -573,6 +607,12 @@ void quadModel(unsigned int n_elem, double L, double p, P typeP)
     resolvendoSistemaTime.print();
 //    cout <<"\n\n"<< MatrixXd(x)<<endl;
 
+    cout << "Calculado  \t\tAnalitico" << std::fixed << std::setprecision(15)<< endl;
+    for(unsigned int i = 0; i < size; i++)
+    {
+        cout << x(i) << "  \t\t" << analytical(i) << "\t\t" << calculateError(x(i), analytical(i))  << endl;
+    }
+    cout << "\n\n\nerro global  " << std::scientific << calculateError(x, analytical) <<endl<<endl<<endl;
 
     //testar esses valores: https://www.ufsj.edu.br/portal2-repositorio/File/nepomuceno/mn/21MN_EDO4.pdf
     //esse aqui tmb: https://phkonzen.github.io/notas/MatematicaNumerica/cap_edp_sec_Poisson.html
@@ -2078,6 +2118,16 @@ void haunchedBeamModel(double L, double l_haunch, double l_base, double H,
 
 int main(int argc, char *argv[])
 {
+    unsigned int n_elem = 192; //numero de elementos em cada direção (SEMPRE PAR) 6 12 24 48
+    double L = 2; //tamanho do domínio quadrado
+    double p = 0;   //constante para a função p
+    P typeP = P::PATCH_TEST;
+    if(argc>1)
+        n_elem = atoi(argv[1]);
+    quadModel(n_elem, L, p, typeP);
+
+
+
 //    unsigned int n_elem =10; //numero de elementos em cada direção (SEMPRE PAR)
 //    double L = M_PI; //tamanho do domínio quadrado
 //    double p = 1;   //constante para a função p
@@ -2085,6 +2135,10 @@ int main(int argc, char *argv[])
 //    if(argc>1)
 //        n_elem = atoi(argv[1]);
 //    quadModel(n_elem, L, p, typeP);
+
+
+
+
 
 //    unsigned int n_elemL = 2000; //numero de elementos em cada direção X
 //    unsigned int n_elemD = 2000; //numero de elementos em cada direção Y
@@ -2096,21 +2150,24 @@ int main(int argc, char *argv[])
 //        n_elemL = n_elemD= atoi(argv[1]);
     //ladderModel(n_elemL, n_elemD, L, D, p, typeP);
 
-    double L = 12; //largura total (m)
-    double l_haunch = 0.5; //tamanho da misula
-    double l_base = 0.1; //tamanho da base reta da misula
-    double H = 0.6; //altura total
-    double h_haunch = 0.2; //tamanho da misula
-    double b = 0.3; //thickness
-    double p = -5000;   //constante para a função p
-    double E = 2.21*pow(10, 10); //concreto
-    double nu = 0.15;
-    P typeP = P::CONSTANT;
-    unsigned int n_xb = 3; //numero de nós na base (número impar!)
 
 
-    haunchedBeamModel(L, l_haunch, l_base, H,
-                      h_haunch, b, E, nu, p, typeP, n_xb);
+
+//    double L = 12; //largura total (m)
+//    double l_haunch = 0.5; //tamanho da misula
+//    double l_base = 0.1; //tamanho da base reta da misula
+//    double H = 0.6; //altura total
+//    double h_haunch = 0.2; //tamanho da misula
+//    double b = 0.3; //thickness
+//    double p = -5000;   //constante para a função p
+//    double E = 2.21*pow(10, 10); //concreto
+//    double nu = 0.15;
+//    P typeP = P::CONSTANT;
+//    unsigned int n_xb = 3; //numero de nós na base (número impar!)
+
+
+//    haunchedBeamModel(L, l_haunch, l_base, H,
+//                      h_haunch, b, E, nu, p, typeP, n_xb);
 
     return 0;
 }
