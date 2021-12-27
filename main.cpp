@@ -70,6 +70,29 @@ double pFunction(P _typeP, double _constant, const Vector2d &_x = Vector2d(0,0))
     return 0;
 }
 
+
+
+double calculateConditionNumber(const MatrixXd &A)
+{
+//    cout << "\n-------------------------\n\n----------------------\n" <<  setprecision(15) << A <<endl;
+
+
+    VectorXcd eivals = A.eigenvalues();
+    cout << "autovalores \n" << eivals <<endl;
+
+    std::vector<double> myvector;
+    for(auto i = 0; i < eivals.rows(); i++)
+        myvector.push_back( fabs(eivals[i].real()));
+
+    std::sort (myvector.begin(), myvector.end());
+
+    double conditionNumber = fabs(myvector.back())/fabs(myvector.front());
+
+    cout << "Condition Number: " << conditionNumber << endl;
+
+    return conditionNumber;
+}
+
 double calculateError(const VectorXd &_calculated, const VectorXd &_analytical)
 {
     return (_calculated-_analytical).norm()/_analytical.norm();
@@ -582,6 +605,9 @@ void quadModel(unsigned int n_elem, double L, double p, P typeP)
     K.setFromTriplets(coeffK.begin(), coeffK.end());
     coeffK.clear();
     K.makeCompressed();
+
+    calculateConditionNumber(MatrixXd(K));
+
 
     f.setFromTriplets(coeffF.begin(), coeffF.end());
     coeffF.clear();
@@ -2118,7 +2144,7 @@ void haunchedBeamModel(double L, double l_haunch, double l_base, double H,
 
 int main(int argc, char *argv[])
 {
-    unsigned int n_elem = 192; //numero de elementos em cada direção (SEMPRE PAR) 6 12 24 48
+    unsigned int n_elem = 24; //numero de elementos em cada direção (SEMPRE PAR) 6 12 24 48
     double L = 2; //tamanho do domínio quadrado
     double p = 0;   //constante para a função p
     P typeP = P::PATCH_TEST;
