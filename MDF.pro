@@ -28,7 +28,7 @@ DEFINES += QT_DEPRECATED_WARNINGS
 
 
 INCLUDEPATH +=\
-    eigen-3.3.7
+    eigen-3.4.0
 
 HEADERS += \
     timeSpent.h

@@ -501,7 +501,7 @@ void quadModel(unsigned int n_elem, double L, double p, P typeP)
 {
     //-------------------------------------------------------------------
     //criando as matrizes/vetores
-    MatrixXd *A = new MatrixXd(n_elem+1, n_elem+1);
+    MatrixXi *A = new MatrixXi(n_elem+1, n_elem+1);
     A->setConstant(-1);
     unsigned int size = (n_elem-1)*(n_elem-1);
 //    VectorXd f = VectorXd::Zero(size);
